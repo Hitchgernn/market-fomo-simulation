@@ -28,8 +28,8 @@ const PRESETS = {
     initialPanicFraction: 0.08,
     beta: 0.25,
     priceImpact: 0.02,
-    araPercent: 0.25,
-    arbPercent: 0.15,
+    upperLimitPercent: 0.25,
+    lowerLimitPercent: 0.15,
   },
   dump: {
     shockEnabled: true,
@@ -44,10 +44,10 @@ const PRESETS = {
     initialPanicFraction: 0.02,
     beta: 0.18,
     priceImpact: 0.08,
-    araPercent: 0.25,
-    arbPercent: 0.15,
+    upperLimitPercent: 0.25,
+    lowerLimitPercent: 0.15,
   },
-  arb: {
+  lowerLimit: {
     shockEnabled: true,
     shockProbability: 0.75,
     shockCooldownTicks: 2,
@@ -60,8 +60,8 @@ const PRESETS = {
     initialPanicFraction: 0,
     beta: 0.2,
     priceImpact: 0.18,
-    araPercent: 0.2,
-    arbPercent: 0.08,
+    upperLimitPercent: 0.2,
+    lowerLimitPercent: 0.08,
   },
 };
 
@@ -96,7 +96,7 @@ function initControls() {
   document.getElementById("apply-button").addEventListener("click", applyConfig);
   document.getElementById("preset-fomo").addEventListener("click", () => applyPreset("fomo"));
   document.getElementById("preset-dump").addEventListener("click", () => applyPreset("dump"));
-  document.getElementById("preset-arb").addEventListener("click", () => applyPreset("arb"));
+  document.getElementById("preset-lower-limit").addEventListener("click", () => applyPreset("lowerLimit"));
   document.getElementById("tickSpeed").addEventListener("change", () => {
     tickSpeedMs = clampNumber(readNumber("tickSpeed"), 150, 10000);
     restartPolling();
@@ -394,8 +394,8 @@ function updateMetrics(payload) {
   const totalVolume = orderBook.buyVolume + orderBook.sellVolume || 1;
   const buyShare = (orderBook.buyVolume / totalVolume) * 100;
   const sellShare = (orderBook.sellVolume / totalVolume) * 100;
-  const bandWidth = price.araLimit - price.arbLimit || 1;
-  const priceBand = ((price.current - price.arbLimit) / bandWidth) * 100;
+  const bandWidth = price.upperLimit - price.lowerLimit || 1;
+  const priceBand = ((price.current - price.lowerLimit) / bandWidth) * 100;
 
   setText("tick-label", `Tick ${payload.tick}`);
   setText("price-value", formatNumber(price.current));
@@ -404,8 +404,8 @@ function updateMetrics(payload) {
   setText("aware-count", counts.A ?? 0);
   setText("panic-count", counts.P ?? 0);
   setText("market-regime", market.regime);
-  setText("ara-value", formatNumber(price.araLimit));
-  setText("arb-value", formatNumber(price.arbLimit));
+  setText("upper-limit-value", formatNumber(price.upperLimit));
+  setText("lower-limit-value", formatNumber(price.lowerLimit));
   setText("buy-volume", orderBook.buyVolume);
   setText("sell-volume", orderBook.sellVolume);
 
@@ -413,12 +413,16 @@ function updateMetrics(payload) {
   document.getElementById("sell-bar").style.width = `${sellShare}%`;
   document.getElementById("price-band").style.width = `${constrain(priceBand, 0, 100)}%`;
 
-  const rejection = price.araTriggered ? "ARA" : price.arbTriggered ? "ARB" : "Clear";
-  setText("rejection-state", rejection);
-  document.getElementById("rejection-state").className =
-    price.araTriggered ? "up" : price.arbTriggered ? "down" : "";
-  document.getElementById("rejection-bar").style.width =
-    price.araTriggered || price.arbTriggered ? "100%" : "0%";
+  const limitState = price.upperLimitTriggered
+    ? "Upper Limit"
+    : price.lowerLimitTriggered
+      ? "Lower Limit"
+      : "Clear";
+  setText("limit-state", limitState);
+  document.getElementById("limit-state").className =
+    price.upperLimitTriggered ? "up" : price.lowerLimitTriggered ? "down" : "";
+  document.getElementById("limit-bar").style.width =
+    price.upperLimitTriggered || price.lowerLimitTriggered ? "100%" : "0%";
 }
 
 function appendHistory(payload) {
@@ -435,8 +439,8 @@ function appendHistory(payload) {
     regime: payload.market?.regime ?? "normal",
     shockVolume: payload.market?.shockVolume ?? 0,
     hasDump: payload.events?.some((event) => event.type === "market_maker_dump") ?? false,
-    araTriggered: payload.price.araTriggered,
-    arbTriggered: payload.price.arbTriggered,
+    upperLimitTriggered: payload.price.upperLimitTriggered,
+    lowerLimitTriggered: payload.price.lowerLimitTriggered,
   });
 
   while (history.length > HISTORY_LIMIT) {
@@ -455,13 +459,13 @@ function updateChart() {
   marketChart.data.labels = history.map((sample) => sample.tick);
   marketChart.data.datasets[0].data = history.map((sample) => sample.price);
   marketChart.data.datasets[0].pointBackgroundColor = history.map((sample) => {
-    if (sample.arbTriggered) {
+    if (sample.lowerLimitTriggered) {
       return "#7f1d1d";
     }
     if (sample.hasDump) {
       return "#ef4444";
     }
-    if (sample.araTriggered) {
+    if (sample.upperLimitTriggered) {
       return "#22c55e";
     }
     return "#60a5fa";
@@ -549,8 +553,8 @@ function readConfig() {
     priceImpact: clampNumber(readNumber("priceImpact"), 0, 1),
     initialAwareFraction: clampNumber(readNumber("initialAwareFraction"), 0, 1),
     initialPanicFraction: clampNumber(readNumber("initialPanicFraction"), 0, 1),
-    araPercent: clampNumber(readNumber("araPercent"), 0, 1),
-    arbPercent: clampNumber(readNumber("arbPercent"), 0, 1),
+    upperLimitPercent: clampNumber(readNumber("upperLimitPercent"), 0, 1),
+    lowerLimitPercent: clampNumber(readNumber("lowerLimitPercent"), 0, 1),
     shockEnabled: document.getElementById("shockEnabled").checked,
     shockProbability: clampNumber(readNumber("shockProbability"), 0, 1),
     shockCooldownTicks: Math.round(clampNumber(readNumber("shockCooldownTicks"), 0, 1000)),

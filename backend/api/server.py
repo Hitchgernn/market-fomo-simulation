@@ -42,8 +42,8 @@ class SimulationConfig(BaseModel):
         ge=0,
         le=1,
     )
-    ara_percent: float = Field(0.25, alias="araPercent", ge=0, le=1)
-    arb_percent: float = Field(0.15, alias="arbPercent", ge=0, le=1)
+    upper_limit_percent: float = Field(0.25, alias="upperLimitPercent", ge=0, le=1)
+    lower_limit_percent: float = Field(0.15, alias="lowerLimitPercent", ge=0, le=1)
     shock_enabled: bool = Field(False, alias="shockEnabled")
     shock_probability: float = Field(0.0, alias="shockProbability", ge=0, le=1)
     shock_cooldown_ticks: int = Field(5, alias="shockCooldownTicks", ge=0, le=1000)
@@ -91,8 +91,8 @@ def create_model(config: SimulationConfig | None = None) -> StockMarketModel:
         beta=active_config.beta,
         base_price=active_config.base_price,
         price_impact=active_config.price_impact,
-        ara_percent=active_config.ara_percent,
-        arb_percent=active_config.arb_percent,
+        upper_limit_percent=active_config.upper_limit_percent,
+        lower_limit_percent=active_config.lower_limit_percent,
         initial_aware_fraction=active_config.initial_aware_fraction,
         initial_panic_fraction=active_config.initial_panic_fraction,
         shock_enabled=active_config.shock_enabled,
@@ -153,12 +153,12 @@ def _serialize_state(stock_model: StockMarketModel) -> dict[str, Any]:
             "previous": stock_model.previous_price,
             "base": stock_model.base_price,
             "drawdown": stock_model.last_price_drawdown,
-            "araLimit": stock_model.ara_limit,
-            "arbLimit": stock_model.arb_limit,
-            "araPercent": stock_model.ara_percent,
-            "arbPercent": stock_model.arb_percent,
-            "araTriggered": stock_model.ara_triggered,
-            "arbTriggered": stock_model.arb_triggered,
+            "upperLimit": stock_model.upper_price_limit,
+            "lowerLimit": stock_model.lower_price_limit,
+            "upperLimitPercent": stock_model.upper_limit_percent,
+            "lowerLimitPercent": stock_model.lower_limit_percent,
+            "upperLimitTriggered": stock_model.upper_limit_triggered,
+            "lowerLimitTriggered": stock_model.lower_limit_triggered,
         },
         "orderBook": {
             "buyVolume": stock_model.last_buy_volume,

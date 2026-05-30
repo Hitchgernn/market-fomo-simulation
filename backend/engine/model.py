@@ -27,7 +27,7 @@ class AgentChat:
 
 @dataclass(frozen=True, slots=True)
 class MarketEvent:
-    """Market event emitted by stochastic shock and rejection mechanics."""
+    """Market event emitted by stochastic shock and price-limit mechanics."""
 
     type: str
     message: str
@@ -47,8 +47,8 @@ class StockMarketModel(mesa.Model):
         beta: float = 0.15,
         base_price: float = 100.0,
         price_impact: float = 0.02,
-        ara_percent: float = 0.25,
-        arb_percent: float = 0.15,
+        upper_limit_percent: float = 0.25,
+        lower_limit_percent: float = 0.15,
         initial_aware_fraction: float = 0.10,
         initial_panic_fraction: float = 0.05,
         network_degree: int = 4,
@@ -81,12 +81,12 @@ class StockMarketModel(mesa.Model):
         self.base_price = float(base_price)
         self.current_price = float(base_price)
         self.price_impact = max(0.0, price_impact)
-        self.ara_percent = self._clamp(ara_percent, 0.0, 1.0)
-        self.arb_percent = self._clamp(arb_percent, 0.0, 1.0)
-        self.ara_limit = self.base_price * (1 + self.ara_percent)
-        self.arb_limit = self.base_price * (1 - self.arb_percent)
-        self.ara_triggered = False
-        self.arb_triggered = False
+        self.upper_limit_percent = self._clamp(upper_limit_percent, 0.0, 1.0)
+        self.lower_limit_percent = self._clamp(lower_limit_percent, 0.0, 1.0)
+        self.upper_price_limit = self.base_price * (1 + self.upper_limit_percent)
+        self.lower_price_limit = self.base_price * (1 - self.lower_limit_percent)
+        self.upper_limit_triggered = False
+        self.lower_limit_triggered = False
         self.last_order_imbalance = 0.0
         self.last_buy_volume = 0
         self.last_sell_volume = 0
@@ -137,7 +137,7 @@ class StockMarketModel(mesa.Model):
         self._panic_sell_active = self.shock_enabled and self.market_regime in {
             "shock",
             "panic",
-            "arb",
+            "lower_limit",
         }
         shock_triggered = self._maybe_submit_market_maker_dump()
         if shock_triggered:
@@ -273,18 +273,22 @@ class StockMarketModel(mesa.Model):
 
         if total_volume == 0:
             self.last_order_imbalance = 0.0
-            self.ara_triggered = False
-            self.arb_triggered = False
+            self.upper_limit_triggered = False
+            self.lower_limit_triggered = False
             return
 
         imbalance = (buy_volume - sell_volume) / total_volume
         candidate_price = self.current_price * (1 + self.price_impact * imbalance)
-        bounded_price = self._clamp(candidate_price, self.arb_limit, self.ara_limit)
+        bounded_price = self._clamp(
+            candidate_price,
+            self.lower_price_limit,
+            self.upper_price_limit,
+        )
 
         self.last_order_imbalance = imbalance
         self.current_price = bounded_price
-        self.ara_triggered = bounded_price >= self.ara_limit
-        self.arb_triggered = bounded_price <= self.arb_limit
+        self.upper_limit_triggered = bounded_price >= self.upper_price_limit
+        self.lower_limit_triggered = bounded_price <= self.lower_price_limit
 
     def _update_drawdown(self) -> None:
         if self.previous_price <= 0:
@@ -323,7 +327,7 @@ class StockMarketModel(mesa.Model):
     def _panic_probability(self) -> float:
         if not self.shock_enabled:
             return 0.0
-        if self.arb_triggered:
+        if self.lower_limit_triggered:
             return 1.0
 
         panic_pressure = (
@@ -333,22 +337,22 @@ class StockMarketModel(mesa.Model):
         return self._clamp(panic_pressure, 0.0, 1.0)
 
     def _update_market_regime(self, shock_triggered: bool, panic_count: int) -> None:
-        if self.arb_triggered:
-            self.market_regime = "arb"
+        if self.lower_limit_triggered:
+            self.market_regime = "lower_limit"
             self.latest_events.append(
                 MarketEvent(
-                    type="arb_triggered",
-                    message="price touched lower auto rejection",
+                    type="lower_limit_triggered",
+                    message="price touched lower price limit",
                     severity="danger",
                     tick=self.steps,
                 )
             )
-        elif self.ara_triggered:
-            self.market_regime = "ara"
+        elif self.upper_limit_triggered:
+            self.market_regime = "upper_limit"
             self.latest_events.append(
                 MarketEvent(
-                    type="ara_triggered",
-                    message="price touched upper auto rejection",
+                    type="upper_limit_triggered",
+                    message="price touched upper price limit",
                     severity="success",
                     tick=self.steps,
                 )

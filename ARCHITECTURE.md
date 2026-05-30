@@ -13,7 +13,7 @@ Sistem simulasi pasar saham berbasis agen dengan arsitektur decoupled. Backend b
 fomo-market-sim/
 ├── backend/
 │   ├── engine/
-│   │   ├── model.py         # Logika makro, Order Book, ARA/ARB
+│   │   ├── model.py         # Logika makro, Order Book, Upper/Lower Price Limits
 │   │   ├── agent.py         # Perilaku mikro, transisi stokastik N -> A -> P
 │   ├── api/
 │   │   ├── server.py        # FastAPI server (Entry point backend)
@@ -36,9 +36,9 @@ Di mana \beta adalah sensitivitas informasi, dan k adalah jumlah tetangga di gra
 
     Limit Order Book: Menghitung order imbalance.
 
-    Auto Rejection Atas (ARA): Batas harian maksimal naik +25%.
+    Upper Price Limit: Batas harian maksimal naik +25%.
 
-    Auto Rejection Bawah (ARB): Batas harian maksimal turun -15%.
+    Lower Price Limit: Batas harian maksimal turun -15%.
 
 5. Integrasi LLM (AI Chat)
 
@@ -58,7 +58,7 @@ Buka sesi obrolan baru dengan Codex dan jalankan *prompt* ini secara berurutan.
 > 
 > Di `agent.py`, buat class `RetailInvestor` dan `InstitutionalInvestor` menggunakan struktur Mesa. Terapkan logika probabilitas transisi $P(\text{Exposure})$ pada fungsi `step()`.
 > 
-> Di `model.py`, buat class `StockMarketModel` menggunakan `NetworkGrid`. Terapkan mekanisme penghitungan harga *Limit Order Book* sederhana serta batasan persentase ARA dan ARB.
+> Di `model.py`, buat class `StockMarketModel` menggunakan `NetworkGrid`. Terapkan mekanisme penghitungan harga *Limit Order Book* sederhana serta batasan persentase upper dan lower price limit.
 > Tulis Python backend murni. Jangan pedulikan UI atau API dulu.
 
 #### 🔌 Prompt 2: Membangun Backend LLM (Rotator)
@@ -73,7 +73,7 @@ Buka sesi obrolan baru dengan Codex dan jalankan *prompt* ini secara berurutan.
 > Mari selesaikan *backend* dengan membuat titik komunikasi (API). Buat file `backend/api/server.py` menggunakan `FastAPI` (jangan gunakan Streamlit).
 > 
 > Buat sebuah *endpoint* `GET /tick` yang akan melangkah (menjalankan `model.step()`) satu kali dalam simulasi Mesa setiap kali dipanggil, lalu mengembalikan data respons JSON utuh berisi:
-> - Harga saham terkini dan indikator ARA/ARB.
+> - Harga saham terkini dan indikator upper/lower price limit.
 > - Data node agen (ID, warna status N/A/P, dan daftar koneksi tetangga).
 > - Teks obrolan baru (jika ada yang digenerate oleh Gemini di *tick* tersebut).
 > Pastikan *server* menggunakan *CORS middleware* agar bisa diakses oleh *frontend* terpisah.

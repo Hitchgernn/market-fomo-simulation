@@ -1,6 +1,6 @@
 # FOMO Market Simulation
 
-A browser-based multi-agent stock market simulation for exploring FOMO, panic selling, order imbalance, auto rejection limits, and stochastic market maker shocks.
+A browser-based multi-agent stock market simulation for exploring FOMO, panic selling, order imbalance, price limits, and stochastic market maker shocks.
 
 The simulation runs without any API key. Gemini chat is optional.
 
@@ -9,7 +9,7 @@ The simulation runs without any API key. Gemini chat is optional.
 - Mesa-based retail and institutional investor agents.
 - Network contagion for the `Neutral -> Aware` transition.
 - Simple Limit Order Book using aggregate buy/sell imbalance.
-- Configurable ARA and ARB price limits.
+- Configurable upper and lower price limits.
 - Stochastic market maker dump scenarios.
 - Live price and volume chart.
 - Interactive network graph and runtime parameters.
@@ -22,7 +22,7 @@ The simulation runs without any API key. Gemini chat is optional.
 |-- backend/
 |   |-- api/server.py          # FastAPI simulation endpoints
 |   |-- engine/agent.py        # Mesa agents and order model
-|   |-- engine/model.py        # StockMarketModel, LOB, ARA/ARB, shocks
+|   |-- engine/model.py        # StockMarketModel, LOB, price limits, shocks
 |   |-- llm/rotator.py         # Optional Gemini key rotator
 |   `-- requirements.txt
 |-- frontend/
@@ -91,17 +91,17 @@ Without keys, chat stays empty but the simulation still works.
 - `Apply`: reset the model using the current parameters.
 - `FOMO Pump`: emphasizes awareness and buy pressure.
 - `Maker Dump`: enables stochastic market maker sell shocks.
-- `ARB Spiral`: stress scenario for drawdown and lower rejection behavior.
+- `Lower Limit Spiral`: stress scenario for drawdown and lower-limit behavior.
 
 Useful parameters:
 
 | Parameter | Meaning |
 | --- | --- |
-| `Base Price` | Initial and reference price for ARA/ARB |
+| `Base Price` | Initial and reference price for upper/lower limits |
 | `Beta` | Social exposure sensitivity |
 | `Price Impact` | Price movement from order imbalance |
-| `ARA Percent` | Upper price limit from base price |
-| `ARB Percent` | Lower price limit from base price |
+| `Upper Limit %` | Upper price limit from base price |
+| `Lower Limit %` | Lower price limit from base price |
 | `Shock Probability` | Chance of market maker dump per eligible tick |
 | `Shock Min/Max Vol` | Random sell shock volume range |
 | `Panic Drawdown` | Drawdown threshold before panic can spread |
@@ -130,8 +130,8 @@ candidatePrice = currentPrice * (1 + priceImpact * imbalance)
 Price limits:
 
 ```text
-araLimit = basePrice * (1 + araPercent)
-arbLimit = basePrice * (1 - arbPercent)
+upperLimit = basePrice * (1 + upperLimitPercent)
+lowerLimit = basePrice * (1 - lowerLimitPercent)
 ```
 
 Market maker shock:

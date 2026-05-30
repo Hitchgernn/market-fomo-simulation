@@ -506,14 +506,14 @@
             <div class="bar"><div id="sell-bar"></div></div>
           </div>
           <div class="metric">
-            <span>ARA / ARB</span>
-            <strong><span id="ara-value">--</span> / <span id="arb-value">--</span></strong>
+            <span>Upper / Lower</span>
+            <strong><span id="upper-limit-value">--</span> / <span id="lower-limit-value">--</span></strong>
             <div class="bar"><div id="price-band"></div></div>
           </div>
           <div class="metric">
-            <span>Auto Rejection</span>
-            <strong id="rejection-state">Clear</strong>
-            <div class="bar"><div id="rejection-bar"></div></div>
+            <span>Limit State</span>
+            <strong id="limit-state">Clear</strong>
+            <div class="bar"><div id="limit-bar"></div></div>
           </div>
         </section>
       </main>
@@ -533,8 +533,8 @@
             <label class="field">Tick Speed ms<input id="tickSpeed" type="number" min="150" max="10000" step="50" value="1200" /></label>
             <label class="field">Aware Fraction<input id="initialAwareFraction" type="number" min="0" max="1" step="0.01" value="0.10" /></label>
             <label class="field">Panic Fraction<input id="initialPanicFraction" type="number" min="0" max="1" step="0.01" value="0.05" /></label>
-            <label class="field">ARA Percent<input id="araPercent" type="number" min="0" max="1" step="0.01" value="0.25" /></label>
-            <label class="field">ARB Percent<input id="arbPercent" type="number" min="0" max="1" step="0.01" value="0.15" /></label>
+            <label class="field">Upper Limit %<input id="upperLimitPercent" type="number" min="0" max="1" step="0.01" value="0.25" /></label>
+            <label class="field">Lower Limit %<input id="lowerLimitPercent" type="number" min="0" max="1" step="0.01" value="0.15" /></label>
             <label class="field">Shock Enabled<span class="toggle-field"><span>Market maker dump</span><input id="shockEnabled" type="checkbox" /></span></label>
             <label class="field">Shock Probability<input id="shockProbability" type="number" min="0" max="1" step="0.01" value="0" /></label>
             <label class="field">Shock Cooldown<input id="shockCooldownTicks" type="number" min="0" max="1000" step="1" value="5" /></label>
@@ -547,7 +547,7 @@
           <div class="preset-row">
             <button id="preset-fomo" type="button">FOMO Pump</button>
             <button id="preset-dump" type="button">Maker Dump</button>
-            <button id="preset-arb" type="button">ARB Spiral</button>
+            <button id="preset-lower-limit" type="button">Lower Limit Spiral</button>
           </div>
           <div class="button-row">
             <button id="run-toggle" type="button">Pause</button>
