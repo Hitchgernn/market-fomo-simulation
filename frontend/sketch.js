@@ -12,6 +12,58 @@ let isRunning = true;
 let tickSpeedMs = 1200;
 let history = [];
 let chatMessageCount = 0;
+let eventMessageCount = 0;
+
+const PRESETS = {
+  fomo: {
+    shockEnabled: false,
+    shockProbability: 0,
+    shockCooldownTicks: 5,
+    shockMinVolume: 25,
+    shockMaxVolume: 80,
+    panicDrawdownThreshold: 0.05,
+    panicSensitivity: 8,
+    panicSellMultiplier: 3,
+    initialAwareFraction: 0.12,
+    initialPanicFraction: 0.08,
+    beta: 0.25,
+    priceImpact: 0.02,
+    araPercent: 0.25,
+    arbPercent: 0.15,
+  },
+  dump: {
+    shockEnabled: true,
+    shockProbability: 0.35,
+    shockCooldownTicks: 5,
+    shockMinVolume: 90,
+    shockMaxVolume: 180,
+    panicDrawdownThreshold: 0.015,
+    panicSensitivity: 35,
+    panicSellMultiplier: 5,
+    initialAwareFraction: 0.18,
+    initialPanicFraction: 0.02,
+    beta: 0.18,
+    priceImpact: 0.08,
+    araPercent: 0.25,
+    arbPercent: 0.15,
+  },
+  arb: {
+    shockEnabled: true,
+    shockProbability: 0.75,
+    shockCooldownTicks: 2,
+    shockMinVolume: 180,
+    shockMaxVolume: 360,
+    panicDrawdownThreshold: 0.005,
+    panicSensitivity: 100,
+    panicSellMultiplier: 8,
+    initialAwareFraction: 0.25,
+    initialPanicFraction: 0,
+    beta: 0.2,
+    priceImpact: 0.18,
+    araPercent: 0.2,
+    arbPercent: 0.08,
+  },
+};
 
 function setup() {
   const host = document.getElementById("network-canvas");
@@ -42,6 +94,9 @@ function initControls() {
   document.getElementById("run-toggle").addEventListener("click", toggleRun);
   document.getElementById("step-button").addEventListener("click", stepOnce);
   document.getElementById("apply-button").addEventListener("click", applyConfig);
+  document.getElementById("preset-fomo").addEventListener("click", () => applyPreset("fomo"));
+  document.getElementById("preset-dump").addEventListener("click", () => applyPreset("dump"));
+  document.getElementById("preset-arb").addEventListener("click", () => applyPreset("arb"));
   document.getElementById("tickSpeed").addEventListener("change", () => {
     tickSpeedMs = clampNumber(readNumber("tickSpeed"), 150, 10000);
     restartPolling();
@@ -188,14 +243,24 @@ async function applyConfig() {
     });
     clearHistory();
     clearChat();
+    clearEvents();
     setStatus("Live", "online");
-    ingestPayload(payload, { appendChart: true, pushChat: false });
+    ingestPayload(payload, { appendChart: true, pushChat: false, pushEvent: false });
     syncControls(payload.config);
     tickSpeedMs = config.tickSpeed;
     restartPolling();
   } catch (error) {
     setStatus("Reset failed", "offline");
   }
+}
+
+async function applyPreset(name) {
+  const preset = PRESETS[name];
+  if (!preset) {
+    return;
+  }
+  syncControls(preset);
+  await applyConfig();
 }
 
 function toggleRun() {
@@ -219,6 +284,7 @@ async function requestJson(url, options) {
 function ingestPayload(payload, options = {}) {
   const appendChart = options.appendChart !== false;
   const pushChat = options.pushChat !== false;
+  const pushEvent = options.pushEvent !== false;
   lastPayload = payload;
   nodes = payload.nodes.map((node) => {
     const existing = nodeMap.get(node.id);
@@ -238,6 +304,9 @@ function ingestPayload(payload, options = {}) {
   }
   if (pushChat) {
     pushChats(payload.chats);
+  }
+  if (pushEvent) {
+    pushEvents(payload.events);
   }
 }
 
@@ -321,6 +390,7 @@ function updateMetrics(payload) {
   const price = payload.price;
   const orderBook = payload.orderBook;
   const counts = payload.stateCounts || { N: 0, A: 0, P: 0 };
+  const market = payload.market || { regime: "normal", shockVolume: 0 };
   const totalVolume = orderBook.buyVolume + orderBook.sellVolume || 1;
   const buyShare = (orderBook.buyVolume / totalVolume) * 100;
   const sellShare = (orderBook.sellVolume / totalVolume) * 100;
@@ -333,6 +403,7 @@ function updateMetrics(payload) {
   setText("neutral-count", counts.N ?? 0);
   setText("aware-count", counts.A ?? 0);
   setText("panic-count", counts.P ?? 0);
+  setText("market-regime", market.regime);
   setText("ara-value", formatNumber(price.araLimit));
   setText("arb-value", formatNumber(price.arbLimit));
   setText("buy-volume", orderBook.buyVolume);
@@ -360,6 +431,10 @@ function appendHistory(payload) {
     price: payload.price.current,
     buyVolume: payload.orderBook.buyVolume,
     sellVolume: payload.orderBook.sellVolume,
+    drawdown: payload.price.drawdown ?? 0,
+    regime: payload.market?.regime ?? "normal",
+    shockVolume: payload.market?.shockVolume ?? 0,
+    hasDump: payload.events?.some((event) => event.type === "market_maker_dump") ?? false,
     araTriggered: payload.price.araTriggered,
     arbTriggered: payload.price.arbTriggered,
   });
@@ -380,11 +455,14 @@ function updateChart() {
   marketChart.data.labels = history.map((sample) => sample.tick);
   marketChart.data.datasets[0].data = history.map((sample) => sample.price);
   marketChart.data.datasets[0].pointBackgroundColor = history.map((sample) => {
+    if (sample.arbTriggered) {
+      return "#7f1d1d";
+    }
+    if (sample.hasDump) {
+      return "#ef4444";
+    }
     if (sample.araTriggered) {
       return "#22c55e";
-    }
-    if (sample.arbTriggered) {
-      return "#ef4444";
     }
     return "#60a5fa";
   });
@@ -418,6 +496,30 @@ function pushChats(chats) {
   setText("chat-count", `${chatMessageCount} messages`);
 }
 
+function pushEvents(events) {
+  if (!Array.isArray(events) || events.length === 0) {
+    return;
+  }
+
+  const feed = document.getElementById("event-feed");
+  for (const event of events) {
+    const item = document.createElement("article");
+    item.className = `event-message ${event.severity || ""}`;
+    item.innerHTML = `
+      <div class="chat-meta">Tick ${event.tick} · ${event.type}</div>
+      <p></p>
+    `;
+    item.querySelector("p").textContent = event.message;
+    feed.prepend(item);
+    eventMessageCount += 1;
+  }
+
+  while (feed.children.length > 50) {
+    feed.removeChild(feed.lastChild);
+  }
+  setText("event-count", `${eventMessageCount} events`);
+}
+
 function clearHistory() {
   history = [];
   updateChart();
@@ -430,7 +532,15 @@ function clearChat() {
   document.getElementById("chat-feed").replaceChildren();
 }
 
+function clearEvents() {
+  eventMessageCount = 0;
+  setText("event-count", "0 events");
+  document.getElementById("event-feed").replaceChildren();
+}
+
 function readConfig() {
+  const shockMinVolume = Math.round(clampNumber(readNumber("shockMinVolume"), 1, 1000000));
+  const shockMaxVolume = Math.round(clampNumber(readNumber("shockMaxVolume"), 1, 1000000));
   return {
     numRetail: Math.round(clampNumber(readNumber("numRetail"), 0, 1000)),
     numInstitutional: Math.round(clampNumber(readNumber("numInstitutional"), 0, 100)),
@@ -441,6 +551,14 @@ function readConfig() {
     initialPanicFraction: clampNumber(readNumber("initialPanicFraction"), 0, 1),
     araPercent: clampNumber(readNumber("araPercent"), 0, 1),
     arbPercent: clampNumber(readNumber("arbPercent"), 0, 1),
+    shockEnabled: document.getElementById("shockEnabled").checked,
+    shockProbability: clampNumber(readNumber("shockProbability"), 0, 1),
+    shockCooldownTicks: Math.round(clampNumber(readNumber("shockCooldownTicks"), 0, 1000)),
+    shockMinVolume,
+    shockMaxVolume: Math.max(shockMinVolume, shockMaxVolume),
+    panicDrawdownThreshold: clampNumber(readNumber("panicDrawdownThreshold"), 0, 1),
+    panicSensitivity: clampNumber(readNumber("panicSensitivity"), 0, 1000),
+    panicSellMultiplier: Math.round(clampNumber(readNumber("panicSellMultiplier"), 1, 1000)),
     tickSpeed: Math.round(clampNumber(readNumber("tickSpeed"), 150, 10000)),
   };
 }
@@ -452,7 +570,11 @@ function syncControls(config) {
   for (const [key, value] of Object.entries(config)) {
     const input = document.getElementById(key);
     if (input && value !== null && value !== undefined) {
-      input.value = value;
+      if (input.type === "checkbox") {
+        input.checked = Boolean(value);
+      } else {
+        input.value = value;
+      }
     }
   }
 }
