@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.engine.model import StockMarketModel
 from backend.llm.rotator import AgentChatRotator
@@ -17,6 +18,41 @@ STATE_COLORS = {
     "A": "#eab308",
     "P": "#ef4444",
 }
+
+
+class SimulationConfig(BaseModel):
+    """Runtime simulation parameters accepted from the frontend."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    num_retail: int = Field(100, alias="numRetail", ge=0, le=1000)
+    num_institutional: int = Field(5, alias="numInstitutional", ge=0, le=100)
+    base_price: float = Field(100.0, alias="basePrice", gt=0)
+    beta: float = Field(0.15, ge=0, le=1)
+    price_impact: float = Field(0.02, alias="priceImpact", ge=0, le=1)
+    initial_aware_fraction: float = Field(
+        0.10,
+        alias="initialAwareFraction",
+        ge=0,
+        le=1,
+    )
+    initial_panic_fraction: float = Field(
+        0.05,
+        alias="initialPanicFraction",
+        ge=0,
+        le=1,
+    )
+    ara_percent: float = Field(0.25, alias="araPercent", ge=0, le=1)
+    arb_percent: float = Field(0.15, alias="arbPercent", ge=0, le=1)
+    rng: int | None = Field(None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_agent_mix(self) -> "SimulationConfig":
+        if self.num_retail + self.num_institutional <= 0:
+            raise ValueError("simulation requires at least one agent")
+        if self.initial_aware_fraction + self.initial_panic_fraction > 1:
+            raise ValueError("aware and panic fractions cannot exceed 1 total")
+        return self
 
 
 def _read_api_keys() -> list[str]:
@@ -31,12 +67,26 @@ def _build_chat_rotator() -> AgentChatRotator | None:
     return AgentChatRotator(api_keys=api_keys)
 
 
-def create_model() -> StockMarketModel:
+def create_model(config: SimulationConfig | None = None) -> StockMarketModel:
     """Create the long-lived simulation model used by the API process."""
-    return StockMarketModel(chat_rotator=_build_chat_rotator())
+    active_config = config or SimulationConfig()
+    return StockMarketModel(
+        num_retail=active_config.num_retail,
+        num_institutional=active_config.num_institutional,
+        beta=active_config.beta,
+        base_price=active_config.base_price,
+        price_impact=active_config.price_impact,
+        ara_percent=active_config.ara_percent,
+        arb_percent=active_config.arb_percent,
+        initial_aware_fraction=active_config.initial_aware_fraction,
+        initial_panic_fraction=active_config.initial_panic_fraction,
+        chat_rotator=_build_chat_rotator(),
+        rng=active_config.rng,
+    )
 
 
-model = create_model()
+current_config = SimulationConfig()
+model = create_model(current_config)
 app = FastAPI(title="FOMO Market Simulation API")
 
 app.add_middleware(
@@ -48,32 +98,56 @@ app.add_middleware(
 )
 
 
+@app.get("/state")
+def state() -> dict[str, Any]:
+    """Return the current simulation state without advancing a tick."""
+    return _serialize_state(model)
+
+
 @app.get("/tick")
 def tick() -> dict[str, Any]:
     """Advance the simulation by one tick and return frontend-ready JSON."""
     model.step()
+    return _serialize_state(model)
+
+
+@app.post("/reset")
+def reset(config: SimulationConfig) -> dict[str, Any]:
+    """Reset the simulation with frontend-provided runtime parameters."""
+    global current_config, model
+
+    current_config = config
+    model = create_model(config)
+    return _serialize_state(model)
+
+
+def _serialize_state(stock_model: StockMarketModel) -> dict[str, Any]:
     return {
-        "tick": model.steps,
+        "tick": stock_model.steps,
+        "config": current_config.model_dump(by_alias=True),
         "price": {
-            "current": model.current_price,
-            "base": model.base_price,
-            "araLimit": model.ara_limit,
-            "arbLimit": model.arb_limit,
-            "araTriggered": model.ara_triggered,
-            "arbTriggered": model.arb_triggered,
+            "current": stock_model.current_price,
+            "base": stock_model.base_price,
+            "araLimit": stock_model.ara_limit,
+            "arbLimit": stock_model.arb_limit,
+            "araPercent": stock_model.ara_percent,
+            "arbPercent": stock_model.arb_percent,
+            "araTriggered": stock_model.ara_triggered,
+            "arbTriggered": stock_model.arb_triggered,
         },
         "orderBook": {
-            "buyVolume": model.last_buy_volume,
-            "sellVolume": model.last_sell_volume,
-            "imbalance": model.last_order_imbalance,
+            "buyVolume": stock_model.last_buy_volume,
+            "sellVolume": stock_model.last_sell_volume,
+            "imbalance": stock_model.last_order_imbalance,
         },
-        "nodes": _serialize_nodes(model),
+        "stateCounts": _state_counts(stock_model),
+        "nodes": _serialize_nodes(stock_model),
         "chats": [
             {
                 "agentId": chat.agent_id,
                 "message": chat.message,
             }
-            for chat in model.chats
+            for chat in stock_model.chats
         ],
     }
 
@@ -114,3 +188,13 @@ def _node_to_agent_id(stock_model: StockMarketModel) -> dict[int, int]:
         if agents:
             mapping[node_id] = int(agents[0].unique_id)
     return mapping
+
+
+def _state_counts(stock_model: StockMarketModel) -> dict[str, int]:
+    counts = {"N": 0, "A": 0, "P": 0}
+    for _, agents in stock_model.agents_by_node:
+        for agent in agents:
+            state = getattr(agent, "state", "N")
+            if state in counts:
+                counts[state] += 1
+    return counts
