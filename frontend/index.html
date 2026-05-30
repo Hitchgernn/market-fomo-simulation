@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FOMO Market Simulation</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
     <style>
       :root {
@@ -19,6 +20,7 @@
         --yellow: #eab308;
         --red: #ef4444;
         --cyan: #38bdf8;
+        --blue: #60a5fa;
       }
 
       * {
@@ -35,24 +37,40 @@
           "Segoe UI", sans-serif;
       }
 
+      button,
+      input {
+        font: inherit;
+      }
+
       .shell {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 340px;
+        grid-template-columns: minmax(0, 1fr) 360px;
         gap: 16px;
         min-height: 100vh;
         padding: 16px;
       }
 
-      .main {
+      .main,
+      .side {
         display: grid;
-        grid-template-rows: auto minmax(420px, 1fr) auto;
         gap: 16px;
         min-width: 0;
       }
 
+      .main {
+        grid-template-rows: auto minmax(380px, 1fr) 260px auto;
+      }
+
+      .side {
+        grid-template-rows: auto minmax(260px, 1fr);
+        min-height: 0;
+      }
+
       .topbar,
       .network-panel,
+      .chart-panel,
       .metrics-panel,
+      .control-panel,
       .chat-panel {
         border: 1px solid var(--line);
         background: var(--panel);
@@ -61,7 +79,7 @@
 
       .topbar {
         display: grid;
-        grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(112px, auto));
+        grid-template-columns: minmax(220px, 1fr) repeat(5, minmax(96px, auto));
         gap: 12px;
         align-items: center;
         padding: 14px;
@@ -84,7 +102,8 @@
       .brand span,
       .metric span,
       .chat-meta,
-      .status {
+      .status,
+      label {
         color: var(--muted);
         font-size: 12px;
       }
@@ -104,18 +123,20 @@
         line-height: 1.1;
       }
 
-      .metric .up {
+      .metric .up,
+      .up {
         color: var(--green);
       }
 
-      .metric .down {
+      .metric .down,
+      .down {
         color: var(--red);
       }
 
       .network-panel {
         position: relative;
         overflow: hidden;
-        min-height: 420px;
+        min-height: 380px;
       }
 
       #network-canvas {
@@ -150,9 +171,40 @@
         border-radius: 50%;
       }
 
+      .chart-panel {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        min-height: 240px;
+        padding: 14px;
+      }
+
+      .panel-header,
+      .chat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .panel-header {
+        margin-bottom: 12px;
+      }
+
+      .panel-header h2,
+      .chat-header h2 {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: 0;
+      }
+
+      .chart-wrap {
+        position: relative;
+        min-height: 0;
+      }
+
       .metrics-panel {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 12px;
         padding: 14px;
       }
@@ -171,6 +223,55 @@
         background: var(--cyan);
       }
 
+      .control-panel {
+        padding: 14px;
+      }
+
+      .control-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .field {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      input {
+        width: 100%;
+        min-height: 34px;
+        padding: 7px 9px;
+        color: var(--text);
+        background: #101112;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+
+      .button-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      button {
+        min-height: 36px;
+        color: var(--text);
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      button.primary {
+        color: #07100b;
+        background: var(--green);
+        border-color: var(--green);
+        font-weight: 700;
+      }
+
       .chat-panel {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
@@ -178,18 +279,8 @@
       }
 
       .chat-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
         padding: 14px;
         border-bottom: 1px solid var(--line);
-      }
-
-      .chat-header h2 {
-        margin: 0;
-        font-size: 15px;
-        letter-spacing: 0;
       }
 
       .status {
@@ -238,36 +329,38 @@
         line-height: 1.35;
       }
 
-      @media (max-width: 920px) {
+      @media (max-width: 1080px) {
         .shell {
           grid-template-columns: 1fr;
         }
 
-        .topbar {
+        .side {
           grid-template-columns: 1fr 1fr;
-        }
-
-        .brand {
-          grid-column: 1 / -1;
+          grid-template-rows: auto;
         }
 
         .chat-panel {
-          min-height: 320px;
+          min-height: 360px;
         }
       }
 
-      @media (max-width: 560px) {
+      @media (max-width: 760px) {
         .shell {
           padding: 10px;
         }
 
         .topbar,
-        .metrics-panel {
+        .metrics-panel,
+        .side {
+          grid-template-columns: 1fr;
+        }
+
+        .control-grid {
           grid-template-columns: 1fr;
         }
 
         .network-panel {
-          min-height: 360px;
+          min-height: 340px;
         }
       }
     </style>
@@ -289,12 +382,16 @@
             <strong id="imbalance-value">--</strong>
           </div>
           <div class="metric">
-            <span>ARA</span>
-            <strong id="ara-value">--</strong>
+            <span>Neutral</span>
+            <strong id="neutral-count">--</strong>
           </div>
           <div class="metric">
-            <span>ARB</span>
-            <strong id="arb-value">--</strong>
+            <span>Aware</span>
+            <strong id="aware-count">--</strong>
+          </div>
+          <div class="metric">
+            <span>Panic</span>
+            <strong id="panic-count">--</strong>
           </div>
         </section>
 
@@ -304,6 +401,16 @@
             <span class="legend-item"><span class="dot" style="background: var(--green)"></span>Neutral</span>
             <span class="legend-item"><span class="dot" style="background: var(--yellow)"></span>Aware</span>
             <span class="legend-item"><span class="dot" style="background: var(--red)"></span>Panic</span>
+          </div>
+        </section>
+
+        <section class="chart-panel" aria-label="Live market chart">
+          <div class="panel-header">
+            <h2>Live Market</h2>
+            <span id="history-label" class="status">0 samples</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="market-chart"></canvas>
           </div>
         </section>
 
@@ -319,19 +426,50 @@
             <div class="bar"><div id="sell-bar"></div></div>
           </div>
           <div class="metric">
+            <span>ARA / ARB</span>
+            <strong><span id="ara-value">--</span> / <span id="arb-value">--</span></strong>
+            <div class="bar"><div id="price-band"></div></div>
+          </div>
+          <div class="metric">
             <span>Auto Rejection</span>
             <strong id="rejection-state">Clear</strong>
-            <div class="bar"><div id="price-band"></div></div>
+            <div class="bar"><div id="rejection-bar"></div></div>
           </div>
         </section>
       </main>
 
-      <aside class="chat-panel" aria-label="Agent chat feed">
-        <div class="chat-header">
-          <h2>Market Chat</h2>
-          <span class="status"><span id="status-light" class="status-light"></span><span id="api-status">Connecting</span></span>
-        </div>
-        <div id="chat-feed"></div>
+      <aside class="side">
+        <section class="control-panel" aria-label="Simulation controls">
+          <div class="panel-header">
+            <h2>Controls</h2>
+            <span class="status"><span id="status-light" class="status-light"></span><span id="api-status">Connecting</span></span>
+          </div>
+          <div class="control-grid">
+            <label class="field">Retail Agents<input id="numRetail" type="number" min="0" max="1000" step="1" value="100" /></label>
+            <label class="field">Institutional<input id="numInstitutional" type="number" min="0" max="100" step="1" value="5" /></label>
+            <label class="field">Base Price<input id="basePrice" type="number" min="1" step="1" value="100" /></label>
+            <label class="field">Beta<input id="beta" type="number" min="0" max="1" step="0.01" value="0.15" /></label>
+            <label class="field">Price Impact<input id="priceImpact" type="number" min="0" max="1" step="0.005" value="0.02" /></label>
+            <label class="field">Tick Speed ms<input id="tickSpeed" type="number" min="150" max="10000" step="50" value="1200" /></label>
+            <label class="field">Aware Fraction<input id="initialAwareFraction" type="number" min="0" max="1" step="0.01" value="0.10" /></label>
+            <label class="field">Panic Fraction<input id="initialPanicFraction" type="number" min="0" max="1" step="0.01" value="0.05" /></label>
+            <label class="field">ARA Percent<input id="araPercent" type="number" min="0" max="1" step="0.01" value="0.25" /></label>
+            <label class="field">ARB Percent<input id="arbPercent" type="number" min="0" max="1" step="0.01" value="0.15" /></label>
+          </div>
+          <div class="button-row">
+            <button id="run-toggle" type="button">Pause</button>
+            <button id="step-button" type="button">Step</button>
+            <button id="apply-button" class="primary" type="button">Apply</button>
+          </div>
+        </section>
+
+        <section class="chat-panel" aria-label="Agent chat feed">
+          <div class="chat-header">
+            <h2>Market Chat</h2>
+            <span id="chat-count" class="status">0 messages</span>
+          </div>
+          <div id="chat-feed"></div>
+        </section>
       </aside>
     </div>
 

@@ -1,19 +1,27 @@
-const API_URL = "http://localhost:8000/tick";
-const POLL_INTERVAL_MS = 1200;
+const API_BASE = "http://localhost:8000";
+const HISTORY_LIMIT = 160;
 
 let nodes = [];
 let nodeMap = new Map();
 let pulses = [];
 let lastPayload = null;
 let networkCanvas;
+let marketChart;
+let pollTimer = null;
+let isRunning = true;
+let tickSpeedMs = 1200;
+let history = [];
+let chatMessageCount = 0;
 
 function setup() {
   const host = document.getElementById("network-canvas");
   networkCanvas = createCanvas(host.offsetWidth, host.offsetHeight);
   networkCanvas.parent(host);
   frameRate(30);
-  pollTick();
-  setInterval(pollTick, POLL_INTERVAL_MS);
+  initChart();
+  initControls();
+  fetchState();
+  restartPolling();
 }
 
 function windowResized() {
@@ -30,13 +38,115 @@ function draw() {
   drawNodes();
 }
 
-async function pollTick() {
+function initControls() {
+  document.getElementById("run-toggle").addEventListener("click", toggleRun);
+  document.getElementById("step-button").addEventListener("click", stepOnce);
+  document.getElementById("apply-button").addEventListener("click", applyConfig);
+  document.getElementById("tickSpeed").addEventListener("change", () => {
+    tickSpeedMs = clampNumber(readNumber("tickSpeed"), 150, 10000);
+    restartPolling();
+  });
+}
+
+function initChart() {
+  const canvas = document.getElementById("market-chart");
+  if (!window.Chart || !canvas) {
+    return;
+  }
+
+  marketChart = new Chart(canvas, {
+    data: {
+      labels: [],
+      datasets: [
+        {
+          type: "line",
+          label: "Price",
+          data: [],
+          borderColor: "#60a5fa",
+          backgroundColor: "rgb(96 165 250 / 12%)",
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0.22,
+          yAxisID: "price",
+        },
+        {
+          type: "bar",
+          label: "Buy",
+          data: [],
+          backgroundColor: "rgb(34 197 94 / 38%)",
+          borderColor: "#22c55e",
+          borderWidth: 1,
+          yAxisID: "volume",
+        },
+        {
+          type: "bar",
+          label: "Sell",
+          data: [],
+          backgroundColor: "rgb(239 68 68 / 34%)",
+          borderColor: "#ef4444",
+          borderWidth: 1,
+          yAxisID: "volume",
+        },
+      ],
+    },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: "#9aa39b", boxWidth: 10, boxHeight: 10 },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: "#9aa39b", maxTicksLimit: 8 },
+          grid: { color: "#242829" },
+        },
+        price: {
+          position: "left",
+          ticks: { color: "#9aa39b" },
+          grid: { color: "#242829" },
+        },
+        volume: {
+          position: "right",
+          beginAtZero: true,
+          ticks: { color: "#9aa39b" },
+          grid: { drawOnChartArea: false },
+        },
+      },
+    },
+  });
+}
+
+function restartPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+  }
+  if (isRunning) {
+    pollTimer = setInterval(pollTick, tickSpeedMs);
+  }
+}
+
+async function fetchState() {
   try {
-    const response = await fetch(API_URL, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    const payload = await response.json();
+    const payload = await requestJson(`${API_BASE}/state`);
+    setStatus("Live", "online");
+    ingestPayload(payload, { appendChart: true, pushChat: false });
+    syncControls(payload.config);
+  } catch (error) {
+    setStatus("Offline", "offline");
+  }
+}
+
+async function pollTick() {
+  if (!isRunning) {
+    return;
+  }
+  try {
+    const payload = await requestJson(`${API_BASE}/tick`);
     setStatus("Live", "online");
     ingestPayload(payload);
   } catch (error) {
@@ -44,7 +154,71 @@ async function pollTick() {
   }
 }
 
-function ingestPayload(payload) {
+async function stepOnce() {
+  const wasRunning = isRunning;
+  isRunning = false;
+  updateRunButton();
+  restartPolling();
+
+  try {
+    const payload = await requestJson(`${API_BASE}/tick`);
+    setStatus("Live", "online");
+    ingestPayload(payload);
+  } catch (error) {
+    setStatus("Offline", "offline");
+  }
+
+  isRunning = wasRunning;
+  updateRunButton();
+  restartPolling();
+}
+
+async function applyConfig() {
+  const config = readConfig();
+  if (config.initialAwareFraction + config.initialPanicFraction > 1) {
+    setStatus("Invalid mix", "offline");
+    return;
+  }
+
+  try {
+    const payload = await requestJson(`${API_BASE}/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    clearHistory();
+    clearChat();
+    setStatus("Live", "online");
+    ingestPayload(payload, { appendChart: true, pushChat: false });
+    syncControls(payload.config);
+    tickSpeedMs = config.tickSpeed;
+    restartPolling();
+  } catch (error) {
+    setStatus("Reset failed", "offline");
+  }
+}
+
+function toggleRun() {
+  isRunning = !isRunning;
+  updateRunButton();
+  restartPolling();
+}
+
+function updateRunButton() {
+  document.getElementById("run-toggle").textContent = isRunning ? "Pause" : "Run";
+}
+
+async function requestJson(url, options) {
+  const response = await fetch(url, { cache: "no-store", ...options });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+function ingestPayload(payload, options = {}) {
+  const appendChart = options.appendChart !== false;
+  const pushChat = options.pushChat !== false;
   lastPayload = payload;
   nodes = payload.nodes.map((node) => {
     const existing = nodeMap.get(node.id);
@@ -59,7 +233,12 @@ function ingestPayload(payload) {
   nodeMap = new Map(nodes.map((node) => [node.id, node]));
   layoutNodes();
   updateMetrics(payload);
-  pushChats(payload.chats);
+  if (appendChart) {
+    appendHistory(payload);
+  }
+  if (pushChat) {
+    pushChats(payload.chats);
+  }
 }
 
 function layoutNodes() {
@@ -141,14 +320,19 @@ function drawNodes() {
 function updateMetrics(payload) {
   const price = payload.price;
   const orderBook = payload.orderBook;
+  const counts = payload.stateCounts || { N: 0, A: 0, P: 0 };
   const totalVolume = orderBook.buyVolume + orderBook.sellVolume || 1;
   const buyShare = (orderBook.buyVolume / totalVolume) * 100;
   const sellShare = (orderBook.sellVolume / totalVolume) * 100;
-  const priceBand = ((price.current - price.arbLimit) / (price.araLimit - price.arbLimit)) * 100;
+  const bandWidth = price.araLimit - price.arbLimit || 1;
+  const priceBand = ((price.current - price.arbLimit) / bandWidth) * 100;
 
   setText("tick-label", `Tick ${payload.tick}`);
   setText("price-value", formatNumber(price.current));
   setText("imbalance-value", orderBook.imbalance.toFixed(3));
+  setText("neutral-count", counts.N ?? 0);
+  setText("aware-count", counts.A ?? 0);
+  setText("panic-count", counts.P ?? 0);
   setText("ara-value", formatNumber(price.araLimit));
   setText("arb-value", formatNumber(price.arbLimit));
   setText("buy-volume", orderBook.buyVolume);
@@ -162,6 +346,51 @@ function updateMetrics(payload) {
   setText("rejection-state", rejection);
   document.getElementById("rejection-state").className =
     price.araTriggered ? "up" : price.arbTriggered ? "down" : "";
+  document.getElementById("rejection-bar").style.width =
+    price.araTriggered || price.arbTriggered ? "100%" : "0%";
+}
+
+function appendHistory(payload) {
+  if (history.some((sample) => sample.tick === payload.tick)) {
+    return;
+  }
+
+  history.push({
+    tick: payload.tick,
+    price: payload.price.current,
+    buyVolume: payload.orderBook.buyVolume,
+    sellVolume: payload.orderBook.sellVolume,
+    araTriggered: payload.price.araTriggered,
+    arbTriggered: payload.price.arbTriggered,
+  });
+
+  while (history.length > HISTORY_LIMIT) {
+    history.shift();
+  }
+
+  updateChart();
+}
+
+function updateChart() {
+  setText("history-label", `${history.length} samples`);
+  if (!marketChart) {
+    return;
+  }
+
+  marketChart.data.labels = history.map((sample) => sample.tick);
+  marketChart.data.datasets[0].data = history.map((sample) => sample.price);
+  marketChart.data.datasets[0].pointBackgroundColor = history.map((sample) => {
+    if (sample.araTriggered) {
+      return "#22c55e";
+    }
+    if (sample.arbTriggered) {
+      return "#ef4444";
+    }
+    return "#60a5fa";
+  });
+  marketChart.data.datasets[1].data = history.map((sample) => sample.buyVolume);
+  marketChart.data.datasets[2].data = history.map((sample) => sample.sellVolume);
+  marketChart.update();
 }
 
 function pushChats(chats) {
@@ -180,11 +409,63 @@ function pushChats(chats) {
     `;
     item.querySelector("p").textContent = chat.message;
     feed.prepend(item);
+    chatMessageCount += 1;
   }
 
   while (feed.children.length > 40) {
     feed.removeChild(feed.lastChild);
   }
+  setText("chat-count", `${chatMessageCount} messages`);
+}
+
+function clearHistory() {
+  history = [];
+  updateChart();
+}
+
+function clearChat() {
+  pulses = [];
+  chatMessageCount = 0;
+  setText("chat-count", "0 messages");
+  document.getElementById("chat-feed").replaceChildren();
+}
+
+function readConfig() {
+  return {
+    numRetail: Math.round(clampNumber(readNumber("numRetail"), 0, 1000)),
+    numInstitutional: Math.round(clampNumber(readNumber("numInstitutional"), 0, 100)),
+    basePrice: clampNumber(readNumber("basePrice"), 1, 1000000),
+    beta: clampNumber(readNumber("beta"), 0, 1),
+    priceImpact: clampNumber(readNumber("priceImpact"), 0, 1),
+    initialAwareFraction: clampNumber(readNumber("initialAwareFraction"), 0, 1),
+    initialPanicFraction: clampNumber(readNumber("initialPanicFraction"), 0, 1),
+    araPercent: clampNumber(readNumber("araPercent"), 0, 1),
+    arbPercent: clampNumber(readNumber("arbPercent"), 0, 1),
+    tickSpeed: Math.round(clampNumber(readNumber("tickSpeed"), 150, 10000)),
+  };
+}
+
+function syncControls(config) {
+  if (!config) {
+    return;
+  }
+  for (const [key, value] of Object.entries(config)) {
+    const input = document.getElementById(key);
+    if (input && value !== null && value !== undefined) {
+      input.value = value;
+    }
+  }
+}
+
+function readNumber(id) {
+  return Number(document.getElementById(id).value);
+}
+
+function clampNumber(value, lower, upper) {
+  if (!Number.isFinite(value)) {
+    return lower;
+  }
+  return Math.min(Math.max(value, lower), upper);
 }
 
 function setStatus(label, stateClass) {
