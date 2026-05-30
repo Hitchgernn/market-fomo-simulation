@@ -1,46 +1,46 @@
 # FOMO Market Simulation
 
-Simulasi pasar saham berbasis multi-agent untuk mengamati dinamika FOMO, panic selling, order imbalance, auto rejection, dan shock market maker secara stokastik.
+A multi-agent stock market simulation for exploring FOMO dynamics, panic selling, order imbalance, auto rejection, and stochastic market maker shocks.
 
-Project ini memakai arsitektur decoupled:
+The project uses a decoupled architecture:
 
-- Backend menjalankan core simulation engine dengan Mesa, NetworkX, dan FastAPI.
-- Frontend merender dashboard interaktif di browser dengan p5.js dan Chart.js.
-- LLM chat bersifat opsional. Tanpa API key, simulasi tetap berjalan normal.
+- The backend runs the core simulation engine with Mesa, NetworkX, and FastAPI.
+- The frontend renders an interactive browser dashboard with p5.js and Chart.js.
+- LLM-powered chat is optional. The simulation runs normally without API keys.
 
-## Fitur Utama
+## Key Features
 
-- Multi-agent market simulation dengan agen ritel dan institusi.
-- Network contagion untuk transisi `Neutral -> Aware`.
-- State agen:
+- Multi-agent market simulation with retail and institutional investors.
+- Network contagion for the `Neutral -> Aware` transition.
+- Agent states:
   - `N`: Neutral
   - `A`: Aware
   - `P`: Panic/FOMO
-- Limit Order Book sederhana berbasis aggregate order imbalance.
-- Auto Rejection Atas (ARA) dan Auto Rejection Bawah (ARB) configurable.
+- Simple Limit Order Book based on aggregate order imbalance.
+- Configurable upper auto rejection (ARA) and lower auto rejection (ARB).
 - Stochastic market maker dump:
-  - shock muncul berdasarkan probabilitas
-  - volume dump random dalam range
-  - retail panic terjadi berdasarkan drawdown dan probabilitas
+  - shock events occur by probability
+  - dump volume is random within a configured range
+  - retail panic is triggered by drawdown-based probability
 - Live market chart:
   - price line
   - buy/sell volume bars
-  - marker untuk shock/ARB/ARA
-- Network graph agent dengan warna state.
-- Parameter simulation controls dari frontend.
-- Preset scenario:
+  - markers for shock/ARB/ARA events
+- Agent network graph with state colors.
+- Runtime simulation controls from the frontend.
+- Scenario presets:
   - `FOMO Pump`
   - `Maker Dump`
   - `ARB Spiral`
-- Optional Gemini chat rotator untuk agen panic.
+- Optional Gemini chat rotator for panic agents.
 
-## Struktur Project
+## Project Structure
 
 ```text
 .
 |-- backend/
 |   |-- api/
-|   |   `-- server.py          # FastAPI endpoints dan simulation config
+|   |   `-- server.py          # FastAPI endpoints and simulation config
 |   |-- engine/
 |   |   |-- agent.py           # RetailInvestor, InstitutionalInvestor, Order
 |   |   `-- model.py           # StockMarketModel, LOB, ARA/ARB, shock logic
@@ -48,8 +48,8 @@ Project ini memakai arsitektur decoupled:
 |   |   `-- rotator.py         # Gemini API key round-robin rotator
 |   `-- requirements.txt
 |-- frontend/
-|   |-- index.html             # Dashboard layout dan controls
-|   `-- sketch.js              # p5 graph, polling API, Chart.js updates
+|   |-- index.html             # Dashboard layout and controls
+|   `-- sketch.js              # p5 graph, API polling, Chart.js updates
 |-- ARCHITECTURE.md
 |-- COMMIT_CONVENTION.md
 `-- README.md
@@ -57,166 +57,166 @@ Project ini memakai arsitektur decoupled:
 
 ## Requirements
 
-- Python 3.11+ direkomendasikan
-- Browser modern
-- Internet hanya dibutuhkan frontend untuk CDN:
+- Python 3.11+ recommended
+- A modern browser
+- Internet access is only required by the frontend CDNs:
   - p5.js
   - Chart.js
-- Gemini API key opsional
+- Gemini API key is optional
 
-Install dependency backend:
+Install backend dependencies:
 
 ```bash
 cd /home/hitchgernn/projects/fomo-simulation-revised
 python -m pip install -r backend/requirements.txt
 ```
 
-## Menjalankan Project
+## Running the Project
 
-### 1. Jalankan backend tanpa API key
+### 1. Run the backend without API keys
 
-Gunakan ini kalau hanya ingin test simulasi, frontend, chart, dan controls tanpa chat LLM:
+Use this mode when you only want to test the simulation, frontend, chart, and controls without LLM chat:
 
 ```bash
 cd /home/hitchgernn/projects/fomo-simulation-revised
 GEMINI_API_KEY= GEMINI_API_KEYS= uvicorn backend.api.server:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Endpoint backend:
+Backend endpoints:
 
 ```text
 http://127.0.0.1:8000/state
 http://127.0.0.1:8000/tick
 ```
 
-Root `http://127.0.0.1:8000/` memang tidak dipakai dan bisa mengembalikan `404`.
+The root URL `http://127.0.0.1:8000/` is not used and may return `404`.
 
-### 2. Jalankan frontend
+### 2. Run the frontend
 
 ```bash
 cd /home/hitchgernn/projects/fomo-simulation-revised/frontend
 python -m http.server 5501
 ```
 
-Buka:
+Open:
 
 ```text
 http://127.0.0.1:5501
 ```
 
-Kalau port `5501` sudah dipakai, ganti ke port lain:
+If port `5501` is already in use, choose another port:
 
 ```bash
 python -m http.server 5502
 ```
 
-### 3. Jalankan dengan Gemini API key opsional
+### 3. Run with an optional Gemini API key
 
-Untuk mengaktifkan chat agent panic:
+To enable panic-agent chat:
 
 ```bash
 cd /home/hitchgernn/projects/fomo-simulation-revised
 GEMINI_API_KEY="your_api_key" uvicorn backend.api.server:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Untuk banyak key:
+For multiple keys:
 
 ```bash
 GEMINI_API_KEYS="key_1,key_2,key_3" uvicorn backend.api.server:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Jika key tidak ada, `chat_rotator=None` dan simulasi tetap berjalan.
+If no key is configured, `chat_rotator=None` and the simulation still works.
 
-## Cara Pakai Dashboard
+## Dashboard Usage
 
-1. Pastikan backend berjalan di `http://localhost:8000`.
-2. Buka frontend.
-3. Pilih preset:
-   - `FOMO Pump`: shock off, lebih menonjolkan FOMO-buy contagion.
-   - `Maker Dump`: market maker sell shock aktif secara probabilistik.
-   - `ARB Spiral`: shock lebih agresif untuk mensimulasikan tekanan ke ARB.
-4. Ubah parameter jika perlu.
-5. Klik `Apply` untuk reset model dengan config baru.
-6. Gunakan:
-   - `Pause` / `Run` untuk menghentikan atau melanjutkan polling.
-   - `Step` untuk menjalankan satu tick manual.
+1. Make sure the backend is running at `http://localhost:8000`.
+2. Open the frontend.
+3. Choose a preset:
+   - `FOMO Pump`: shock off, emphasizes FOMO-buy contagion.
+   - `Maker Dump`: probabilistic market maker sell shock.
+   - `ARB Spiral`: more aggressive shock settings to stress the lower rejection band.
+4. Adjust parameters if needed.
+5. Click `Apply` to reset the model with the new config.
+6. Use:
+   - `Pause` / `Run` to stop or resume polling.
+   - `Step` to advance one tick manually.
 
-## Parameter Simulasi
+## Simulation Parameters
 
-| Parameter | Makna |
+| Parameter | Meaning |
 | --- | --- |
-| `numRetail` | Jumlah agen ritel |
-| `numInstitutional` | Jumlah agen institusi |
-| `basePrice` | Harga dasar saham |
-| `beta` | Sensitivitas social exposure untuk `N -> A` |
-| `priceImpact` | Dampak order imbalance ke harga |
-| `initialAwareFraction` | Proporsi awal agen ritel Aware |
-| `initialPanicFraction` | Proporsi awal agen ritel Panic |
-| `araPercent` | Batas kenaikan maksimal dari base price |
-| `arbPercent` | Batas penurunan maksimal dari base price |
-| `shockEnabled` | Mengaktifkan market maker dump |
-| `shockProbability` | Probabilitas shock per tick saat cooldown selesai |
-| `shockCooldownTicks` | Jarak minimal antar shock |
-| `shockMinVolume` | Volume sell shock minimum |
-| `shockMaxVolume` | Volume sell shock maksimum |
-| `panicDrawdownThreshold` | Drawdown minimum untuk mulai memicu panic |
-| `panicSensitivity` | Pengali probabilitas panic setelah drawdown melewati threshold |
-| `panicSellMultiplier` | Pengali volume sell untuk agen Panic saat crash regime |
-| `rng` | Seed opsional untuk pseudo-stochastic reproducibility |
+| `numRetail` | Number of retail agents |
+| `numInstitutional` | Number of institutional agents |
+| `basePrice` | Base stock price |
+| `beta` | Social exposure sensitivity for `N -> A` |
+| `priceImpact` | Price impact from order imbalance |
+| `initialAwareFraction` | Initial fraction of Aware retail agents |
+| `initialPanicFraction` | Initial fraction of Panic retail agents |
+| `araPercent` | Maximum upside limit from base price |
+| `arbPercent` | Maximum downside limit from base price |
+| `shockEnabled` | Enables market maker dump shocks |
+| `shockProbability` | Shock probability per eligible tick |
+| `shockCooldownTicks` | Minimum tick gap between shocks |
+| `shockMinVolume` | Minimum sell shock volume |
+| `shockMaxVolume` | Maximum sell shock volume |
+| `panicDrawdownThreshold` | Minimum drawdown before panic can trigger |
+| `panicSensitivity` | Panic probability multiplier after drawdown exceeds threshold |
+| `panicSellMultiplier` | Sell volume multiplier for Panic agents in crash regime |
+| `rng` | Optional seed for pseudo-stochastic reproducibility |
 
-## Model Stokastik
+## Stochastic Model
 
-Project ini bukan deterministic murni. Ia memakai random draw di beberapa bagian:
+This project is not purely deterministic. It uses random draws in multiple places:
 
-- Network graph dibuat dari random seed.
-- Urutan agent step diacak setiap tick.
-- State awal agen ritel di-shuffle.
-- Transisi `Neutral -> Aware` memakai probabilitas:
+- Network graph generation uses a random seed.
+- Agent step order is shuffled every tick.
+- Initial retail agent states are shuffled.
+- The `Neutral -> Aware` transition uses probability:
 
 ```text
 P(Exposure) = 1 - (1 - beta)^k
 ```
 
-Dengan:
+Where:
 
-- `beta`: sensitivitas informasi.
-- `k`: jumlah tetangga yang berada dalam state `P`.
+- `beta`: information sensitivity.
+- `k`: number of neighboring agents in state `P`.
 
-Market maker dump juga stokastik:
+The market maker dump is stochastic too:
 
 ```text
 shock happens if random() < shockProbability
 shockVolume = random integer between shockMinVolume and shockMaxVolume
 ```
 
-Retail panic akibat crash:
+Retail panic after a crash:
 
 ```text
 panicPressure = max(0, drawdown - panicDrawdownThreshold) * panicSensitivity
 panicProbability = clamp(panicPressure, 0, 1)
 ```
 
-Jika `rng` diisi, hasil menjadi reproducible pseudo-stochastic. Artinya tetap random-draw based, tetapi seed yang sama cenderung menghasilkan pola yang sama.
+If `rng` is provided, the result becomes reproducible pseudo-stochastic. It is still based on random draws, but the same seed tends to produce the same pattern.
 
 ## Price Discovery
 
-Setiap tick:
+Every tick:
 
-1. Agen menghasilkan order buy/sell.
-2. Market maker shock bisa menambahkan sell order besar.
-3. Backend menghitung aggregate volume:
+1. Agents generate buy/sell orders.
+2. A market maker shock may add a large sell order.
+3. The backend computes aggregate volume:
 
 ```text
 imbalance = (buyVolume - sellVolume) / totalVolume
 ```
 
-4. Harga berubah:
+4. Price changes:
 
 ```text
 candidatePrice = currentPrice * (1 + priceImpact * imbalance)
 ```
 
-5. Harga di-clamp oleh ARA/ARB:
+5. Price is clamped by ARA/ARB:
 
 ```text
 araLimit = basePrice * (1 + araPercent)
@@ -225,7 +225,7 @@ arbLimit = basePrice * (1 - arbPercent)
 
 ## API
 
-Base URL default:
+Default base URL:
 
 ```text
 http://127.0.0.1:8000
@@ -233,17 +233,17 @@ http://127.0.0.1:8000
 
 ### GET `/state`
 
-Mengambil state saat ini tanpa menjalankan tick.
+Returns the current simulation state without advancing a tick.
 
 ### GET `/tick`
 
-Menjalankan satu tick simulasi, lalu mengembalikan state terbaru.
+Advances the simulation by one tick and returns the latest state.
 
 ### POST `/reset`
 
-Reset model dengan config baru.
+Resets the model with a new config.
 
-Contoh body:
+Example body:
 
 ```json
 {
@@ -268,7 +268,7 @@ Contoh body:
 }
 ```
 
-Response utama berisi:
+Main response fields:
 
 - `tick`
 - `config`
@@ -280,21 +280,21 @@ Response utama berisi:
 - `nodes`
 - `chats`
 
-## Testing dan Verifikasi
+## Testing and Verification
 
-Compile backend:
+Compile the backend:
 
 ```bash
 python -m compileall backend
 ```
 
-Syntax check frontend JavaScript:
+Check frontend JavaScript syntax:
 
 ```bash
 node --check frontend/sketch.js
 ```
 
-Smoke test API langsung dari Python:
+Run a direct API smoke test from Python:
 
 ```bash
 python - <<'PY'
@@ -333,56 +333,57 @@ PY
 
 ## Troubleshooting
 
-### Frontend status `Offline`
+### Frontend status is `Offline`
 
-Backend belum jalan atau tidak berada di `localhost:8000`.
+The backend is not running or is not available at `localhost:8000`.
 
-Jalankan:
+Run:
 
 ```bash
 GEMINI_API_KEY= GEMINI_API_KEYS= uvicorn backend.api.server:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### Port backend sudah dipakai
+### Backend port is already in use
 
-Cari proses yang memakai port, atau jalankan backend di port lain.
+Find the process using the port, or run the backend on a different port.
 
-Jika backend diganti port, update `API_BASE` di `frontend/sketch.js`.
+If the backend port changes, update `API_BASE` in `frontend/sketch.js`.
 
-### Port frontend sudah dipakai
+### Frontend port is already in use
 
-Ganti port static server:
+Use another static server port:
 
 ```bash
 cd frontend
 python -m http.server 5502
 ```
 
-### Chat kosong
+### Chat is empty
 
-Itu normal jika tidak ada Gemini API key. Semua fitur simulasi, chart, network graph, dan shock tetap berjalan.
+This is normal if no Gemini API key is configured. Simulation, chart, network graph, and shock features still work.
 
-### Chart tidak muncul
+### Chart does not appear
 
-Pastikan browser bisa mengakses CDN Chart.js:
+Make sure the browser can access the Chart.js CDN:
 
 ```text
 https://cdn.jsdelivr.net/npm/chart.js
 ```
 
-Jika offline penuh, download Chart.js dan p5.js ke folder frontend, lalu ubah script tag di `index.html`.
+For a fully offline setup, download Chart.js and p5.js into the frontend folder and update the script tags in `index.html`.
 
 ## Development Notes
 
-- Ikuti aturan commit di `COMMIT_CONVENTION.md`.
-- Gunakan Conventional Commits.
-- Jangan campur perubahan engine, API, frontend, dan docs dalam satu commit besar.
-- Backend tidak boleh bergantung pada UI.
-- Frontend hanya polling API dan merender state.
+- Follow `COMMIT_CONVENTION.md`.
+- Use Conventional Commits.
+- Do not bundle engine, API, frontend, and docs changes in one large commit.
+- The backend must not depend on the UI.
+- The frontend only polls the API and renders state.
 
-## Limitasi Saat Ini
+## Current Limitations
 
-- LOB masih aggregate imbalance, belum full bid/ask level book.
-- Market maker dump dimodelkan sebagai synthetic sell order, bukan agent Mesa terpisah.
-- Simulasi ini untuk eksplorasi perilaku pasar, bukan prediksi harga nyata.
-- Tidak ada persistence database; state hidup di memori proses FastAPI.
+- The LOB is still aggregate imbalance, not a full bid/ask level book.
+- Market maker dump is modeled as a synthetic sell order, not a separate Mesa agent.
+- This simulation is for market behavior exploration, not real price prediction.
+- There is no database persistence; state lives in the FastAPI process memory.
+
