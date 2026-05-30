@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FOMO Market Simulation</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #101112;
+        --panel: #181a1b;
+        --panel-soft: #202324;
+        --line: #343839;
+        --text: #f2f5f1;
+        --muted: #9aa39b;
+        --green: #22c55e;
+        --yellow: #eab308;
+        --red: #ef4444;
+        --cyan: #38bdf8;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 16px;
+        min-height: 100vh;
+        padding: 16px;
+      }
+
+      .main {
+        display: grid;
+        grid-template-rows: auto minmax(420px, 1fr) auto;
+        gap: 16px;
+        min-width: 0;
+      }
+
+      .topbar,
+      .network-panel,
+      .metrics-panel,
+      .chat-panel {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 8px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(112px, auto));
+        gap: 12px;
+        align-items: center;
+        padding: 14px;
+      }
+
+      .brand {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      .brand span,
+      .metric span,
+      .chat-meta,
+      .status {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metric {
+        min-width: 0;
+        padding: 10px 12px;
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 18px;
+        line-height: 1.1;
+      }
+
+      .metric .up {
+        color: var(--green);
+      }
+
+      .metric .down {
+        color: var(--red);
+      }
+
+      .network-panel {
+        position: relative;
+        overflow: hidden;
+        min-height: 420px;
+      }
+
+      #network-canvas {
+        position: absolute;
+        inset: 0;
+      }
+
+      .legend {
+        position: absolute;
+        left: 14px;
+        bottom: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px;
+        background: rgb(16 17 18 / 78%);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+      }
+
+      .metrics-panel {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        padding: 14px;
+      }
+
+      .bar {
+        height: 8px;
+        margin-top: 10px;
+        overflow: hidden;
+        background: #0f1011;
+        border-radius: 999px;
+      }
+
+      .bar div {
+        width: 50%;
+        height: 100%;
+        background: var(--cyan);
+      }
+
+      .chat-panel {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        min-height: 0;
+      }
+
+      .chat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .chat-header h2 {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: 0;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+
+      .status-light {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--yellow);
+      }
+
+      .status-light.online {
+        background: var(--green);
+      }
+
+      .status-light.offline {
+        background: var(--red);
+      }
+
+      #chat-feed {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+        overflow: auto;
+        padding: 14px;
+      }
+
+      .chat-message {
+        padding: 10px;
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--red);
+        border-radius: 6px;
+      }
+
+      .chat-message p {
+        margin: 5px 0 0;
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.35;
+      }
+
+      @media (max-width: 920px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        .topbar {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .brand {
+          grid-column: 1 / -1;
+        }
+
+        .chat-panel {
+          min-height: 320px;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .shell {
+          padding: 10px;
+        }
+
+        .topbar,
+        .metrics-panel {
+          grid-template-columns: 1fr;
+        }
+
+        .network-panel {
+          min-height: 360px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <main class="main">
+        <section class="topbar" aria-label="Market status">
+          <div class="brand">
+            <h1>FOMO Market Simulation</h1>
+            <span id="tick-label">Tick 0</span>
+          </div>
+          <div class="metric">
+            <span>Price</span>
+            <strong id="price-value">--</strong>
+          </div>
+          <div class="metric">
+            <span>Imbalance</span>
+            <strong id="imbalance-value">--</strong>
+          </div>
+          <div class="metric">
+            <span>ARA</span>
+            <strong id="ara-value">--</strong>
+          </div>
+          <div class="metric">
+            <span>ARB</span>
+            <strong id="arb-value">--</strong>
+          </div>
+        </section>
+
+        <section class="network-panel" aria-label="Agent network">
+          <div id="network-canvas"></div>
+          <div class="legend" aria-label="Agent state legend">
+            <span class="legend-item"><span class="dot" style="background: var(--green)"></span>Neutral</span>
+            <span class="legend-item"><span class="dot" style="background: var(--yellow)"></span>Aware</span>
+            <span class="legend-item"><span class="dot" style="background: var(--red)"></span>Panic</span>
+          </div>
+        </section>
+
+        <section class="metrics-panel" aria-label="Order book">
+          <div class="metric">
+            <span>Buy Volume</span>
+            <strong id="buy-volume">--</strong>
+            <div class="bar"><div id="buy-bar"></div></div>
+          </div>
+          <div class="metric">
+            <span>Sell Volume</span>
+            <strong id="sell-volume">--</strong>
+            <div class="bar"><div id="sell-bar"></div></div>
+          </div>
+          <div class="metric">
+            <span>Auto Rejection</span>
+            <strong id="rejection-state">Clear</strong>
+            <div class="bar"><div id="price-band"></div></div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="chat-panel" aria-label="Agent chat feed">
+        <div class="chat-header">
+          <h2>Market Chat</h2>
+          <span class="status"><span id="status-light" class="status-light"></span><span id="api-status">Connecting</span></span>
+        </div>
+        <div id="chat-feed"></div>
+      </aside>
+    </div>
+
+    <script src="./sketch.js"></script>
+  </body>
+</html>
