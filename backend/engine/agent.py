@@ -45,6 +45,9 @@ class RetailInvestor(mesa.Agent):
             if self.model.random.random() < exposure_probability:
                 self.state = "A"
 
+        if self.state == "P":
+            self.model.maybe_generate_chat(self)
+
         self.model.submit_order(self._build_order())
 
     def _count_panic_neighbors(self) -> int:

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from dataclasses import dataclass
+from typing import Any, Iterable
 
 import mesa
 import networkx as nx
@@ -14,6 +15,14 @@ from backend.engine.agent import (
     Order,
     RetailInvestor,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class AgentChat:
+    """Chat message produced by a panic retail investor in one tick."""
+
+    agent_id: int
+    message: str
 
 
 class StockMarketModel(mesa.Model):
@@ -31,6 +40,8 @@ class StockMarketModel(mesa.Model):
         network_degree: int = 4,
         retail_order_quantity: int = 1,
         institutional_order_quantity: int = 10,
+        chat_rotator: Any | None = None,
+        chat_probability: float = 0.05,
         rng: int | None = None,
     ) -> None:
         super().__init__(rng=rng)
@@ -56,6 +67,9 @@ class StockMarketModel(mesa.Model):
         self.last_buy_volume = 0
         self.last_sell_volume = 0
         self._orders: list[Order] = []
+        self.chat_rotator = chat_rotator
+        self.chat_probability = self._clamp(chat_probability, 0.0, 1.0)
+        self.latest_chats: list[AgentChat] = []
 
         graph = self._build_network(
             total_agents=num_retail + num_institutional,
@@ -73,6 +87,7 @@ class StockMarketModel(mesa.Model):
     def step(self) -> None:
         """Run one simulation tick and update price from order imbalance."""
         self._orders = []
+        self.latest_chats = []
         self.agents.shuffle_do("step")
         self._discover_price()
 
@@ -81,6 +96,28 @@ class StockMarketModel(mesa.Model):
         if order.quantity <= 0:
             return
         self._orders.append(order)
+
+    def maybe_generate_chat(self, agent: RetailInvestor) -> None:
+        """Generate panic chat for an agent with bounded per-tick probability."""
+        if self.chat_rotator is None:
+            return
+        if self.random.random() >= self.chat_probability:
+            return
+
+        context = (
+            f"price={self.current_price:.2f}, "
+            f"imbalance={self.last_order_imbalance:.2f}, "
+            f"state={agent.state}"
+        )
+        try:
+            message = self.chat_rotator.generate_chat(context=context)
+        except Exception:
+            return
+
+        if message:
+            self.latest_chats.append(
+                AgentChat(agent_id=int(agent.unique_id), message=message)
+            )
 
     def _build_network(self, total_agents: int, network_degree: int) -> nx.Graph:
         if total_agents <= 1:
@@ -177,6 +214,11 @@ class StockMarketModel(mesa.Model):
     def orders(self) -> tuple[Order, ...]:
         """Read-only view of orders submitted during the latest tick."""
         return tuple(self._orders)
+
+    @property
+    def chats(self) -> tuple[AgentChat, ...]:
+        """Read-only chat messages produced during the latest tick."""
+        return tuple(self.latest_chats)
 
     @property
     def agents_by_node(self) -> Iterable[tuple[int, list[mesa.Agent]]]:
