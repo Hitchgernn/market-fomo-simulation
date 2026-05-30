@@ -58,7 +58,7 @@
       }
 
       .main {
-        grid-template-rows: auto minmax(380px, 1fr) 260px auto;
+        grid-template-rows: auto minmax(260px, 32vh) minmax(430px, 1fr) auto;
       }
 
       .side {
@@ -137,7 +137,7 @@
       .network-panel {
         position: relative;
         overflow: hidden;
-        min-height: 380px;
+        min-height: 260px;
       }
 
       #network-canvas {
@@ -175,7 +175,7 @@
       .chart-panel {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
-        min-height: 240px;
+        min-height: 430px;
         padding: 14px;
       }
 
@@ -432,7 +432,11 @@
         }
 
         .network-panel {
-          min-height: 340px;
+          min-height: 280px;
+        }
+
+        .chart-panel {
+          min-height: 360px;
         }
       }
     </style>
