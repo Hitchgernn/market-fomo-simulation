@@ -25,6 +25,18 @@ class AgentChat:
     message: str
 
 
+@dataclass(frozen=True, slots=True)
+class MarketEvent:
+    """Market event emitted by stochastic shock and rejection mechanics."""
+
+    type: str
+    message: str
+    severity: str
+    tick: int
+    volume: int | None = None
+    count: int | None = None
+
+
 class StockMarketModel(mesa.Model):
     """Stock market simulation with social contagion and simple LOB pricing."""
 
@@ -42,6 +54,14 @@ class StockMarketModel(mesa.Model):
         network_degree: int = 4,
         retail_order_quantity: int = 1,
         institutional_order_quantity: int = 10,
+        shock_enabled: bool = False,
+        shock_probability: float = 0.0,
+        shock_cooldown_ticks: int = 5,
+        shock_min_volume: int = 25,
+        shock_max_volume: int = 80,
+        panic_drawdown_threshold: float = 0.05,
+        panic_sensitivity: float = 8.0,
+        panic_sell_multiplier: int = 3,
         chat_rotator: Any | None = None,
         chat_probability: float = 0.05,
         rng: int | None = None,
@@ -71,6 +91,25 @@ class StockMarketModel(mesa.Model):
         self.last_buy_volume = 0
         self.last_sell_volume = 0
         self._orders: list[Order] = []
+        self.previous_price = float(base_price)
+        self.last_price_drawdown = 0.0
+        self.market_regime = "normal"
+        self.last_shock_volume = 0
+        self.latest_events: list[MarketEvent] = []
+        self.shock_enabled = shock_enabled
+        self.shock_probability = self._clamp(shock_probability, 0.0, 1.0)
+        self.shock_cooldown_ticks = max(0, shock_cooldown_ticks)
+        self.shock_min_volume = max(1, shock_min_volume)
+        self.shock_max_volume = max(self.shock_min_volume, shock_max_volume)
+        self.panic_drawdown_threshold = self._clamp(
+            panic_drawdown_threshold,
+            0.0,
+            1.0,
+        )
+        self.panic_sensitivity = max(0.0, panic_sensitivity)
+        self.panic_sell_multiplier = max(1, panic_sell_multiplier)
+        self._shock_cooldown_remaining = 0
+        self._panic_sell_active = False
         self.chat_rotator = chat_rotator
         self.chat_probability = self._clamp(chat_probability, 0.0, 1.0)
         self.latest_chats: list[AgentChat] = []
@@ -92,14 +131,37 @@ class StockMarketModel(mesa.Model):
         """Run one simulation tick and update price from order imbalance."""
         self._orders = []
         self.latest_chats = []
+        self.latest_events = []
+        self.previous_price = self.current_price
+        self.last_shock_volume = 0
+        self._panic_sell_active = self.shock_enabled and self.market_regime in {
+            "shock",
+            "panic",
+            "arb",
+        }
+        shock_triggered = self._maybe_submit_market_maker_dump()
+        if shock_triggered:
+            self._panic_sell_active = True
+
         self.agents.shuffle_do("step")
         self._discover_price()
+        self._update_drawdown()
+        panic_count = self._apply_crash_panic()
+        self._update_market_regime(
+            shock_triggered=shock_triggered,
+            panic_count=panic_count,
+        )
+        self._tick_shock_cooldown()
 
     def submit_order(self, order: Order) -> None:
         """Add an order intent to the current tick's aggregate order book."""
         if order.quantity <= 0:
             return
         self._orders.append(order)
+
+    def should_panic_sell(self) -> bool:
+        """Return whether panic retail should sell instead of FOMO-buy this tick."""
+        return self._panic_sell_active
 
     def maybe_generate_chat(self, agent: RetailInvestor) -> None:
         """Generate panic chat for an agent with bounded per-tick probability."""
@@ -122,6 +184,29 @@ class StockMarketModel(mesa.Model):
             self.latest_chats.append(
                 AgentChat(agent_id=int(agent.unique_id), message=message)
             )
+
+    def _maybe_submit_market_maker_dump(self) -> bool:
+        if not self.shock_enabled:
+            return False
+        if self._shock_cooldown_remaining > 0:
+            return False
+        if self.random.random() >= self.shock_probability:
+            return False
+
+        volume = self.random.randint(self.shock_min_volume, self.shock_max_volume)
+        self.last_shock_volume = volume
+        self._shock_cooldown_remaining = self.shock_cooldown_ticks
+        self.submit_order(Order(agent_id=0, side="sell", quantity=volume))
+        self.latest_events.append(
+            MarketEvent(
+                type="market_maker_dump",
+                message=f"market maker dump sell volume {volume}",
+                severity="danger",
+                tick=self.steps,
+                volume=volume,
+            )
+        )
+        return True
 
     def _build_network(self, total_agents: int, network_degree: int) -> nx.Graph:
         if total_agents <= 1:
@@ -201,6 +286,84 @@ class StockMarketModel(mesa.Model):
         self.ara_triggered = bounded_price >= self.ara_limit
         self.arb_triggered = bounded_price <= self.arb_limit
 
+    def _update_drawdown(self) -> None:
+        if self.previous_price <= 0:
+            self.last_price_drawdown = 0.0
+            return
+        raw_drawdown = (self.previous_price - self.current_price) / self.previous_price
+        self.last_price_drawdown = max(0.0, raw_drawdown)
+
+    def _apply_crash_panic(self) -> int:
+        panic_probability = self._panic_probability()
+        if panic_probability <= 0:
+            return 0
+
+        panic_count = 0
+        for agent in self.agents:
+            if not isinstance(agent, RetailInvestor):
+                continue
+            if agent.state == "P":
+                continue
+            if self.random.random() < panic_probability:
+                agent.state = "P"
+                panic_count += 1
+
+        if panic_count:
+            self.latest_events.append(
+                MarketEvent(
+                    type="retail_panic",
+                    message=f"{panic_count} retail investors entered panic",
+                    severity="warning",
+                    tick=self.steps,
+                    count=panic_count,
+                )
+            )
+        return panic_count
+
+    def _panic_probability(self) -> float:
+        if not self.shock_enabled:
+            return 0.0
+        if self.arb_triggered:
+            return 1.0
+
+        panic_pressure = (
+            max(0.0, self.last_price_drawdown - self.panic_drawdown_threshold)
+            * self.panic_sensitivity
+        )
+        return self._clamp(panic_pressure, 0.0, 1.0)
+
+    def _update_market_regime(self, shock_triggered: bool, panic_count: int) -> None:
+        if self.arb_triggered:
+            self.market_regime = "arb"
+            self.latest_events.append(
+                MarketEvent(
+                    type="arb_triggered",
+                    message="price touched lower auto rejection",
+                    severity="danger",
+                    tick=self.steps,
+                )
+            )
+        elif self.ara_triggered:
+            self.market_regime = "ara"
+            self.latest_events.append(
+                MarketEvent(
+                    type="ara_triggered",
+                    message="price touched upper auto rejection",
+                    severity="success",
+                    tick=self.steps,
+                )
+            )
+        elif panic_count > 0 or self.last_price_drawdown >= self.panic_drawdown_threshold:
+            self.market_regime = "panic"
+        elif shock_triggered:
+            self.market_regime = "shock"
+        else:
+            self.market_regime = "normal"
+
+    def _tick_shock_cooldown(self) -> None:
+        if self._shock_cooldown_remaining > 0:
+            self._shock_cooldown_remaining -= 1
+
     def _volume_for(self, side: str) -> int:
         return sum(order.quantity for order in self._orders if order.side == side)
 
@@ -223,6 +386,11 @@ class StockMarketModel(mesa.Model):
     def chats(self) -> tuple[AgentChat, ...]:
         """Read-only chat messages produced during the latest tick."""
         return tuple(self.latest_chats)
+
+    @property
+    def events(self) -> tuple[MarketEvent, ...]:
+        """Read-only market events produced during the latest tick."""
+        return tuple(self.latest_events)
 
     @property
     def agents_by_node(self) -> Iterable[tuple[int, list[mesa.Agent]]]:

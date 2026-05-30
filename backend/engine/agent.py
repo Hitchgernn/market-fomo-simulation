@@ -63,8 +63,12 @@ class RetailInvestor(mesa.Agent):
 
     def _build_order(self) -> Order:
         if self.state == "P":
-            side: OrderSide = "buy"
-            quantity = self.base_quantity * 3
+            if self.model.should_panic_sell():
+                side: OrderSide = "sell"
+                quantity = self.base_quantity * self.model.panic_sell_multiplier
+            else:
+                side = "buy"
+                quantity = self.base_quantity * 3
         elif self.state == "A":
             side = "buy"
             quantity = self.base_quantity * 2
