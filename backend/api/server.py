@@ -44,6 +44,19 @@ class SimulationConfig(BaseModel):
     )
     ara_percent: float = Field(0.25, alias="araPercent", ge=0, le=1)
     arb_percent: float = Field(0.15, alias="arbPercent", ge=0, le=1)
+    shock_enabled: bool = Field(False, alias="shockEnabled")
+    shock_probability: float = Field(0.0, alias="shockProbability", ge=0, le=1)
+    shock_cooldown_ticks: int = Field(5, alias="shockCooldownTicks", ge=0, le=1000)
+    shock_min_volume: int = Field(25, alias="shockMinVolume", ge=1, le=1_000_000)
+    shock_max_volume: int = Field(80, alias="shockMaxVolume", ge=1, le=1_000_000)
+    panic_drawdown_threshold: float = Field(
+        0.05,
+        alias="panicDrawdownThreshold",
+        ge=0,
+        le=1,
+    )
+    panic_sensitivity: float = Field(8.0, alias="panicSensitivity", ge=0, le=1000)
+    panic_sell_multiplier: int = Field(3, alias="panicSellMultiplier", ge=1, le=1000)
     rng: int | None = Field(None, ge=0)
 
     @model_validator(mode="after")
@@ -52,6 +65,8 @@ class SimulationConfig(BaseModel):
             raise ValueError("simulation requires at least one agent")
         if self.initial_aware_fraction + self.initial_panic_fraction > 1:
             raise ValueError("aware and panic fractions cannot exceed 1 total")
+        if self.shock_min_volume > self.shock_max_volume:
+            raise ValueError("shockMinVolume cannot exceed shockMaxVolume")
         return self
 
 
@@ -80,6 +95,14 @@ def create_model(config: SimulationConfig | None = None) -> StockMarketModel:
         arb_percent=active_config.arb_percent,
         initial_aware_fraction=active_config.initial_aware_fraction,
         initial_panic_fraction=active_config.initial_panic_fraction,
+        shock_enabled=active_config.shock_enabled,
+        shock_probability=active_config.shock_probability,
+        shock_cooldown_ticks=active_config.shock_cooldown_ticks,
+        shock_min_volume=active_config.shock_min_volume,
+        shock_max_volume=active_config.shock_max_volume,
+        panic_drawdown_threshold=active_config.panic_drawdown_threshold,
+        panic_sensitivity=active_config.panic_sensitivity,
+        panic_sell_multiplier=active_config.panic_sell_multiplier,
         chat_rotator=_build_chat_rotator(),
         rng=active_config.rng,
     )
@@ -127,7 +150,9 @@ def _serialize_state(stock_model: StockMarketModel) -> dict[str, Any]:
         "config": current_config.model_dump(by_alias=True),
         "price": {
             "current": stock_model.current_price,
+            "previous": stock_model.previous_price,
             "base": stock_model.base_price,
+            "drawdown": stock_model.last_price_drawdown,
             "araLimit": stock_model.ara_limit,
             "arbLimit": stock_model.arb_limit,
             "araPercent": stock_model.ara_percent,
@@ -140,6 +165,21 @@ def _serialize_state(stock_model: StockMarketModel) -> dict[str, Any]:
             "sellVolume": stock_model.last_sell_volume,
             "imbalance": stock_model.last_order_imbalance,
         },
+        "market": {
+            "regime": stock_model.market_regime,
+            "shockVolume": stock_model.last_shock_volume,
+        },
+        "events": [
+            {
+                "type": event.type,
+                "message": event.message,
+                "severity": event.severity,
+                "tick": event.tick,
+                "volume": event.volume,
+                "count": event.count,
+            }
+            for event in stock_model.events
+        ],
         "stateCounts": _state_counts(stock_model),
         "nodes": _serialize_nodes(stock_model),
         "chats": [
