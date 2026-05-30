@@ -35,6 +35,8 @@ class StockMarketModel(mesa.Model):
         beta: float = 0.15,
         base_price: float = 100.0,
         price_impact: float = 0.02,
+        ara_percent: float = 0.25,
+        arb_percent: float = 0.15,
         initial_aware_fraction: float = 0.10,
         initial_panic_fraction: float = 0.05,
         network_degree: int = 4,
@@ -59,8 +61,10 @@ class StockMarketModel(mesa.Model):
         self.base_price = float(base_price)
         self.current_price = float(base_price)
         self.price_impact = max(0.0, price_impact)
-        self.ara_limit = self.base_price * 1.25
-        self.arb_limit = self.base_price * 0.85
+        self.ara_percent = self._clamp(ara_percent, 0.0, 1.0)
+        self.arb_percent = self._clamp(arb_percent, 0.0, 1.0)
+        self.ara_limit = self.base_price * (1 + self.ara_percent)
+        self.arb_limit = self.base_price * (1 - self.arb_percent)
         self.ara_triggered = False
         self.arb_triggered = False
         self.last_order_imbalance = 0.0
