@@ -24,6 +24,8 @@ env/
 build/
 dist/
 *.egg-info/
+.claude/
+.superpowers
 
 # Node / frontend tooling
 node_modules/
@@ -42,3 +44,4 @@ Thumbs.db
 
 # Local planning context
 # ARCHITECTURE.md
+
