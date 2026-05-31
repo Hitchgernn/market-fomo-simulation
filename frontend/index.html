@@ -71,8 +71,7 @@
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
         gap: calc(var(--grid) * 2);
-        width: 1920px;
-        min-height: 1080px;
+        min-height: 100vh;
         padding: calc(var(--grid) * 2);
       }
 
@@ -89,7 +88,7 @@
 
       .terminal-topbar {
         display: grid;
-        grid-template-columns: 300px repeat(6, 1fr);
+        grid-template-columns: minmax(220px, 1.2fr) repeat(6, minmax(104px, 1fr));
         gap: var(--grid);
         align-items: stretch;
         padding: var(--grid);
@@ -130,8 +129,8 @@
 
       .dashboard-grid {
         display: grid;
-        grid-template-columns: 525px 802px 525px;
-        grid-template-rows: 352px 242px 1fr;
+        grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.45fr) minmax(320px, 0.95fr);
+        grid-template-rows: minmax(0, 38vh) minmax(0, 220px) 260px;
         grid-template-areas: "graph market controls" "order market controls" "events chat controls";
         gap: calc(var(--grid) * 2);
         min-height: 0;
