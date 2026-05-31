@@ -2,6 +2,7 @@ const LOCAL_API_BASE = "http://localhost:8000";
 const PROD_API_BASE = window.FOMO_API_BASE || window.location.origin;
 const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? LOCAL_API_BASE : PROD_API_BASE;
 const HISTORY_LIMIT = 160;
+const SCRIPTED_CHAT_INTERVAL_MS = 2000;
 const STATE_PALETTE = {
   N: "#00f5d4",
   A: "#fee440",
@@ -15,6 +16,7 @@ let lastPayload = null;
 let networkCanvas;
 let marketChart;
 let pollTimer = null;
+let scriptedChatTimer = null;
 let isRunning = true;
 let tickSpeedMs = 1200;
 let history = [];
@@ -81,6 +83,7 @@ function setup() {
   initControls();
   fetchState();
   restartPolling();
+  startScriptedChatTimer();
 }
 
 function windowResized() {
@@ -199,6 +202,13 @@ function restartPolling() {
   if (isRunning) {
     pollTimer = setInterval(pollTick, tickSpeedMs);
   }
+}
+
+function startScriptedChatTimer() {
+  if (scriptedChatTimer) {
+    clearInterval(scriptedChatTimer);
+  }
+  scriptedChatTimer = setInterval(addScriptedChatMessage, SCRIPTED_CHAT_INTERVAL_MS);
 }
 
 async function fetchState() {
@@ -517,6 +527,24 @@ function pushChats(chats) {
     feed.removeChild(feed.lastChild);
   }
   setText("chat-count", `${chatMessageCount} messages`);
+}
+
+function addScriptedChatMessage() {
+  if (document.getElementById("chat-mode-ai").checked || !lastPayload) {
+    return;
+  }
+  const price = lastPayload.price || {};
+  const orderBook = lastPayload.orderBook || {};
+  const market = lastPayload.market || {};
+  const lowerLimit = price.lowerLimitTriggered || market.regime === "lower_limit";
+  const dump = (market.shockVolume || 0) > 0 || market.regime === "shock";
+  const bullish = (orderBook.imbalance || 0) > 0.12 || (price.current || 0) > (price.previous || 0);
+  const messages = lowerLimit || dump
+    ? ["market dump, panik mulai kerasa", "mending cutloss dulu sebelum makin dalam", "seller brutal, jangan serok asal"]
+    : bullish
+      ? ["to the moon, buyer masih kuat", "harga naik, FOMO mulai panas", "breakout nih, jangan ketinggalan"]
+      : ["sideways dulu, tunggu breakout", "market masih sepi, sabar entry", "belum jelas arahnya, pantau volume"];
+  pushChats([{ agentId: 0, message: messages[chatMessageCount % messages.length] }]);
 }
 
 function pushEvents(events) {

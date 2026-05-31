@@ -435,6 +435,42 @@
         overflow: hidden;
       }
 
+      .chat-mode-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--grid);
+      }
+
+      .chat-mode-option {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        min-height: calc(var(--grid) * 3.5);
+        padding: calc(var(--grid) * 0.5) var(--grid);
+        color: var(--muted);
+        background: #05070b;
+        border: 2px solid var(--line-dim);
+        box-shadow: 3px 3px 0 var(--shadow);
+        cursor: pointer;
+      }
+
+      .chat-mode-option input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .chat-mode-option:has(input:checked) {
+        color: var(--bg);
+        background: var(--cyan);
+        border-color: var(--cyan);
+      }
+
+      .chat-mode-option:has(input:focus-visible) {
+        border-color: var(--yellow);
+        box-shadow: 4px 4px 0 var(--shadow);
+      }
+
       .status {
         display: inline-flex;
         align-items: center;
@@ -672,14 +708,16 @@
           <div class="chat-header">
             <h2>Market Chat</h2>
             <span class="status">
-              <label>
-                <input id="chat-mode-scripted" name="chatMode" type="radio" value="scripted" checked />
-                Scripted
-              </label>
-              <label>
-                <input id="chat-mode-ai" name="chatMode" type="radio" value="ai" />
-                AI
-              </label>
+              <span class="chat-mode-toggle" aria-label="Chat mode">
+                <label class="chat-mode-option">
+                  <input id="chat-mode-scripted" name="chatMode" type="radio" value="scripted" checked />
+                  Scripted
+                </label>
+                <label class="chat-mode-option">
+                  <input id="chat-mode-ai" name="chatMode" type="radio" value="ai" />
+                  AI
+                </label>
+              </span>
               <span id="chat-count">0 messages</span>
             </span>
           </div>
