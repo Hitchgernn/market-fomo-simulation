@@ -57,6 +57,7 @@ class SimulationConfig(BaseModel):
     )
     panic_sensitivity: float = Field(8.0, alias="panicSensitivity", ge=0, le=1000)
     panic_sell_multiplier: int = Field(3, alias="panicSellMultiplier", ge=1, le=1000)
+    chat_mode: str = Field("scripted", alias="chatMode", pattern="^(scripted|ai)$")
     rng: int | None = Field(None, ge=0)
 
     @model_validator(mode="after")
@@ -145,6 +146,7 @@ def create_model(config: SimulationConfig | None = None) -> StockMarketModel:
         panic_sensitivity=active_config.panic_sensitivity,
         panic_sell_multiplier=active_config.panic_sell_multiplier,
         chat_rotator=_build_chat_rotator(),
+        chat_mode=active_config.chat_mode,
         rng=active_config.rng,
     )
 

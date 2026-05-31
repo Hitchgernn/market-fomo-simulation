@@ -64,6 +64,7 @@ class StockMarketModel(mesa.Model):
         panic_sell_multiplier: int = 3,
         chat_rotator: Any | None = None,
         chat_probability: float = 0.05,
+        chat_mode: str = "scripted",
         rng: int | None = None,
     ) -> None:
         super().__init__(rng=rng)
@@ -112,6 +113,7 @@ class StockMarketModel(mesa.Model):
         self._panic_sell_active = False
         self.chat_rotator = chat_rotator
         self.chat_probability = self._clamp(chat_probability, 0.0, 1.0)
+        self.chat_mode = chat_mode if chat_mode in {"scripted", "ai"} else "scripted"
         self.latest_chats: list[AgentChat] = []
 
         graph = self._build_network(
@@ -151,6 +153,8 @@ class StockMarketModel(mesa.Model):
             shock_triggered=shock_triggered,
             panic_count=panic_count,
         )
+        if self.chat_mode == "scripted":
+            self.latest_chats.append(self.generate_scripted_chat())
         self._tick_shock_cooldown()
 
     def submit_order(self, order: Order) -> None:
@@ -165,6 +169,8 @@ class StockMarketModel(mesa.Model):
 
     def maybe_generate_chat(self, agent: RetailInvestor) -> None:
         """Generate panic chat for an agent with bounded per-tick probability."""
+        if self.chat_mode != "ai":
+            return
         if self.chat_rotator is None:
             return
         if self.random.random() >= self.chat_probability:
@@ -184,6 +190,30 @@ class StockMarketModel(mesa.Model):
             self.latest_chats.append(
                 AgentChat(agent_id=int(agent.unique_id), message=message)
             )
+
+    def generate_scripted_chat(self) -> AgentChat:
+        if self.market_regime in {"shock", "panic", "lower_limit"} or self.last_shock_volume:
+            messages = (
+                "market dump, panik mulai kerasa",
+                "mending cutloss dulu sebelum makin dalam",
+                "seller brutal, jangan serok asal",
+            )
+        elif self.last_order_imbalance > 0.12 or self.current_price > self.previous_price:
+            messages = (
+                "to the moon, buyer masih kuat",
+                "harga naik, FOMO mulai panas",
+                "breakout nih, jangan ketinggalan",
+            )
+        else:
+            messages = (
+                "sideways dulu, tunggu breakout",
+                "market masih sepi, sabar entry",
+                "belum jelas arahnya, pantau volume",
+            )
+        return AgentChat(
+            agent_id=0,
+            message=self.random.choice(messages),
+        )
 
     def _maybe_submit_market_maker_dump(self) -> bool:
         if not self.shock_enabled:

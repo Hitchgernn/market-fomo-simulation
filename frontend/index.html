@@ -727,7 +727,17 @@
         <section class="pixel-panel chat-panel" aria-label="Agent chat feed">
           <div class="chat-header">
             <h2>Market Chat</h2>
-            <span id="chat-count" class="status">0 messages</span>
+            <span class="status">
+              <label>
+                <input id="chat-mode-scripted" name="chatMode" type="radio" value="scripted" checked />
+                Scripted
+              </label>
+              <label>
+                <input id="chat-mode-ai" name="chatMode" type="radio" value="ai" />
+                AI
+              </label>
+              <span id="chat-count">0 messages</span>
+            </span>
           </div>
           <div id="chat-feed" role="log" aria-live="polite" aria-relevant="additions"></div>
         </section>

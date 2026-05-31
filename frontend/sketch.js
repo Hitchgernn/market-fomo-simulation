@@ -582,6 +582,7 @@ function readConfig() {
     panicDrawdownThreshold: clampNumber(readNumber("panicDrawdownThreshold"), 0, 1),
     panicSensitivity: clampNumber(readNumber("panicSensitivity"), 0, 1000),
     panicSellMultiplier: Math.round(clampNumber(readNumber("panicSellMultiplier"), 1, 1000)),
+    chatMode: document.getElementById("chat-mode-ai").checked ? "ai" : "scripted",
     tickSpeed: Math.round(clampNumber(readNumber("tickSpeed"), 150, 10000)),
   };
 }
@@ -590,6 +591,8 @@ function syncControls(config) {
   if (!config) {
     return;
   }
+  document.getElementById("chat-mode-scripted").checked = config.chatMode !== "ai";
+  document.getElementById("chat-mode-ai").checked = config.chatMode === "ai";
   for (const [key, value] of Object.entries(config)) {
     const input = document.getElementById(key);
     if (input && value !== null && value !== undefined) {
