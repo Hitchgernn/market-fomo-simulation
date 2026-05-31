@@ -71,7 +71,8 @@
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
         gap: calc(var(--grid) * 2);
-        min-height: 100vh;
+        width: 1920px;
+        min-height: 1080px;
         padding: calc(var(--grid) * 2);
       }
 
@@ -88,7 +89,7 @@
 
       .terminal-topbar {
         display: grid;
-        grid-template-columns: minmax(220px, 1.2fr) repeat(6, minmax(104px, 1fr));
+        grid-template-columns: 300px repeat(6, 1fr);
         gap: var(--grid);
         align-items: stretch;
         padding: var(--grid);
@@ -129,8 +130,8 @@
 
       .dashboard-grid {
         display: grid;
-        grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.45fr) minmax(320px, 0.95fr);
-        grid-template-rows: minmax(0, 38vh) minmax(0, 220px) minmax(0, 1fr);
+        grid-template-columns: 525px 802px 525px;
+        grid-template-rows: 352px 242px 1fr;
         grid-template-areas: "graph market controls" "order market controls" "events chat controls";
         gap: calc(var(--grid) * 2);
         min-height: 0;
@@ -458,62 +459,6 @@
         background: var(--red);
       }
 
-      @media (max-width: 1240px) {
-        .terminal-topbar {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-
-        .brand {
-          grid-column: 1 / -1;
-        }
-
-        .dashboard-grid {
-          grid-template-columns: minmax(0, 1fr) minmax(320px, 0.8fr);
-          grid-template-rows: minmax(280px, 34vh) minmax(420px, 1fr) auto auto;
-          grid-template-areas: "market controls" "graph controls" "order controls" "events chat";
-        }
-      }
-
-      @media (max-width: 900px) {
-        .dashboard-grid {
-          grid-template-columns: 1fr;
-          grid-template-rows: auto;
-          grid-template-areas: "market" "graph" "order" "controls" "events" "chat";
-        }
-
-        .market-panel,
-        .graph-panel,
-        .chat-panel {
-          min-height: 360px;
-        }
-
-        .terminal-topbar,
-        .control-grid,
-        .order-grid {
-          grid-template-columns: 1fr 1fr;
-        }
-      }
-
-      @media (max-width: 640px) {
-        .terminal-shell {
-          padding: var(--grid);
-        }
-
-        .terminal-topbar,
-        .control-grid,
-        .order-grid,
-        .preset-row,
-        .button-row {
-          grid-template-columns: 1fr;
-        }
-
-        .brand h1,
-        .panel-title,
-        .panel-header h2,
-        .chat-header h2 {
-          font-size: 10px;
-        }
-      }
     </style>
   </head>
   <body>
