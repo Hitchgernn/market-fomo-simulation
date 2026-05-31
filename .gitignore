@@ -24,8 +24,6 @@ env/
 build/
 dist/
 *.egg-info/
-.claude/
-.superpowers
 
 # Node / frontend tooling
 node_modules/
@@ -38,10 +36,13 @@ yarn-error.log*
 Thumbs.db
 .idea/
 .vscode/
+.claude/
+.superpowers
 
 # Local logs
 *.log
 
 # Local planning context
-# ARCHITECTURE.md
+ARCHITECTURE.md
+docs
 

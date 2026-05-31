@@ -11,8 +11,10 @@ The simulation runs without any API key. Gemini chat is optional.
 - Simple Limit Order Book using aggregate buy/sell imbalance.
 - Configurable upper and lower price limits.
 - Stochastic market maker dump scenarios.
-- Live price and volume chart.
-- Interactive network graph and runtime parameters.
+- Pixel trading terminal dashboard UI.
+- Live price and volume chart in the `Live Market` panel.
+- Interactive Mesa network graph in the `Graph` panel.
+- Scrollable market event and chat feeds.
 - Optional Gemini-powered market chat.
 
 ## Project Structure
@@ -67,6 +69,16 @@ http://127.0.0.1:5501
 ```
 
 The frontend expects the backend at `http://127.0.0.1:8000`.
+
+## Pixel Trading Terminal UI
+
+The dashboard keeps trading/simulation terminology visible for presentation clarity:
+
+- `Graph`: Mesa agent network graph.
+- `Live Market`: price and volume chart.
+- `Order Book`: buy/sell volume and price limit state.
+- `Controls`: runtime parameters and presets.
+- `Market Events` / `Market Chat`: scrollable feeds for newer and older messages.
 
 ## Optional Gemini Chat
 
