@@ -1,5 +1,10 @@
 const API_BASE = "http://localhost:8000";
 const HISTORY_LIMIT = 160;
+const STATE_PALETTE = {
+  N: "#00f5d4",
+  A: "#fee440",
+  P: "#ff4d6d",
+};
 
 let nodes = [];
 let nodeMap = new Map();
@@ -83,7 +88,7 @@ function windowResized() {
 }
 
 function draw() {
-  background("#151718");
+  background("#080d18");
   drawGrid();
   drawConnections();
   drawPulses();
@@ -117,8 +122,8 @@ function initChart() {
           type: "line",
           label: "Price",
           data: [],
-          borderColor: "#60a5fa",
-          backgroundColor: "rgb(96 165 250 / 12%)",
+          borderColor: "#00f5d4",
+          backgroundColor: "rgb(0 245 212 / 12%)",
           borderWidth: 2,
           pointRadius: 3,
           pointHoverRadius: 5,
@@ -129,8 +134,8 @@ function initChart() {
           type: "bar",
           label: "Buy",
           data: [],
-          backgroundColor: "rgb(34 197 94 / 38%)",
-          borderColor: "#22c55e",
+          backgroundColor: "rgb(0 245 212 / 42%)",
+          borderColor: "#00f5d4",
           borderWidth: 1,
           yAxisID: "volume",
         },
@@ -138,8 +143,8 @@ function initChart() {
           type: "bar",
           label: "Sell",
           data: [],
-          backgroundColor: "rgb(239 68 68 / 34%)",
-          borderColor: "#ef4444",
+          backgroundColor: "rgb(255 77 109 / 38%)",
+          borderColor: "#ff4d6d",
           borderWidth: 1,
           yAxisID: "volume",
         },
@@ -152,23 +157,32 @@ function initChart() {
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: {
-          labels: { color: "#9aa39b", boxWidth: 10, boxHeight: 10 },
+          labels: {
+            color: "#8ca3b8",
+            boxWidth: 12,
+            boxHeight: 12,
+            font: { family: "Share Tech Mono" },
+          },
         },
       },
       scales: {
         x: {
-          ticks: { color: "#9aa39b", maxTicksLimit: 8 },
-          grid: { color: "#242829" },
+          ticks: {
+            color: "#8ca3b8",
+            maxTicksLimit: 8,
+            font: { family: "Share Tech Mono" },
+          },
+          grid: { color: "#17213a" },
         },
         price: {
           position: "left",
-          ticks: { color: "#9aa39b" },
-          grid: { color: "#242829" },
+          ticks: { color: "#8ca3b8", font: { family: "Share Tech Mono" } },
+          grid: { color: "#17213a" },
         },
         volume: {
           position: "right",
           beginAtZero: true,
-          ticks: { color: "#9aa39b" },
+          ticks: { color: "#8ca3b8", font: { family: "Share Tech Mono" } },
           grid: { drawOnChartArea: false },
         },
       },
@@ -294,6 +308,7 @@ function ingestPayload(payload, options = {}) {
       y: existing?.y ?? random(height * 0.15, height * 0.85),
       vx: existing?.vx ?? 0,
       vy: existing?.vy ?? 0,
+      color: STATE_PALETTE[node.state] || node.color,
     };
   });
   nodeMap = new Map(nodes.map((node) => [node.id, node]));
@@ -329,19 +344,19 @@ function layoutNodes() {
 }
 
 function drawGrid() {
-  stroke("#242829");
+  stroke("#17213a");
   strokeWeight(1);
-  for (let x = 0; x < width; x += 36) {
+  for (let x = 0; x < width; x += 24) {
     line(x, 0, x, height);
   }
-  for (let y = 0; y < height; y += 36) {
+  for (let y = 0; y < height; y += 24) {
     line(0, y, width, y);
   }
 }
 
 function drawConnections() {
-  stroke("#3a3f40");
-  strokeWeight(1);
+  stroke("#40506d");
+  strokeWeight(1.5);
   for (const node of nodes) {
     for (const targetId of node.connections) {
       if (node.id > targetId) {
@@ -377,11 +392,13 @@ function drawNodes() {
   textAlign(CENTER, CENTER);
   textSize(10);
   for (const node of nodes) {
-    const size = node.state === "P" ? 15 : node.state === "A" ? 12 : 10;
-    noStroke();
+    const size = node.state === "P" ? 16 : node.state === "A" ? 13 : 11;
+    stroke("#05070d");
+    strokeWeight(2);
     fill(node.color);
     circle(node.x, node.y, size);
-    fill("#f2f5f1");
+    noStroke();
+    fill("#e8f7ff");
     text(node.id, node.x, node.y - 16);
   }
 }
@@ -460,15 +477,15 @@ function updateChart() {
   marketChart.data.datasets[0].data = history.map((sample) => sample.price);
   marketChart.data.datasets[0].pointBackgroundColor = history.map((sample) => {
     if (sample.lowerLimitTriggered) {
-      return "#7f1d1d";
+      return "#ff4d6d";
     }
     if (sample.hasDump) {
-      return "#ef4444";
+      return "#f15bb5";
     }
     if (sample.upperLimitTriggered) {
-      return "#22c55e";
+      return "#00f5d4";
     }
-    return "#60a5fa";
+    return "#00bbf9";
   });
   marketChart.data.datasets[1].data = history.map((sample) => sample.buyVolume);
   marketChart.data.datasets[2].data = history.map((sample) => sample.sellVolume);
