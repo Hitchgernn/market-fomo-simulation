@@ -70,16 +70,57 @@ class SimulationConfig(BaseModel):
         return self
 
 
-def _read_api_keys() -> list[str]:
-    raw_keys = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY") or ""
+def _read_api_keys(env_name: str) -> list[str]:
+    raw_keys = os.getenv(env_name) or ""
     return [key.strip() for key in raw_keys.split(",") if key.strip()]
 
 
 def _build_chat_rotator() -> AgentChatRotator | None:
-    api_keys = _read_api_keys()
-    if not api_keys:
-        return None
-    return AgentChatRotator(api_keys=api_keys)
+    provider = os.getenv("CHAT_PROVIDER", "gemini").strip().lower()
+    if provider == "gemini":
+        api_keys = _read_api_keys("GEMINI_API_KEYS") or _read_api_keys("GEMINI_API_KEY")
+        if not api_keys:
+            return None
+        return AgentChatRotator(
+            api_keys=api_keys,
+            provider="gemini",
+            model_name=os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
+        )
+    if provider == "openrouter":
+        api_keys = _read_api_keys("OPENROUTER_API_KEY")
+        if not api_keys:
+            return None
+        return AgentChatRotator(
+            api_keys=api_keys,
+            provider="openrouter",
+            model_name=os.getenv(
+                "OPENROUTER_MODEL",
+                "meta-llama/llama-3.2-3b-instruct:free",
+            ),
+        )
+    if provider == "ollama":
+        return AgentChatRotator(
+            provider="ollama",
+            model_name=os.getenv("OLLAMA_MODEL", "qwen3.5:4b"),
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        )
+    return None
+
+
+def _chat_status(chat_rotator: AgentChatRotator | None) -> dict[str, Any]:
+    if chat_rotator is None:
+        return {
+            "enabled": False,
+            "provider": None,
+            "model": None,
+            "lastError": None,
+        }
+    return {
+        "enabled": True,
+        "provider": chat_rotator.provider,
+        "model": chat_rotator.model_name,
+        "lastError": chat_rotator.last_error,
+    }
 
 
 def create_model(config: SimulationConfig | None = None) -> StockMarketModel:
@@ -169,6 +210,7 @@ def _serialize_state(stock_model: StockMarketModel) -> dict[str, Any]:
             "regime": stock_model.market_regime,
             "shockVolume": stock_model.last_shock_volume,
         },
+        "chat": _chat_status(stock_model.chat_rotator),
         "events": [
             {
                 "type": event.type,
