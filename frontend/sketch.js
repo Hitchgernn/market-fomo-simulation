@@ -1,4 +1,6 @@
-const API_BASE = "http://localhost:8000";
+const LOCAL_API_BASE = "http://localhost:8000";
+const PROD_API_BASE = window.FOMO_API_BASE || window.location.origin;
+const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? LOCAL_API_BASE : PROD_API_BASE;
 const HISTORY_LIMIT = 160;
 const STATE_PALETTE = {
   N: "#00f5d4",
