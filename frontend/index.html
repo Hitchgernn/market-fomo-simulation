@@ -71,7 +71,8 @@
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
         gap: calc(var(--grid) * 2);
-        min-height: 100vh;
+        height: 100vh;
+        overflow: hidden;
         padding: calc(var(--grid) * 2);
       }
 
@@ -130,7 +131,7 @@
       .dashboard-grid {
         display: grid;
         grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.45fr) minmax(320px, 0.95fr);
-        grid-template-rows: minmax(300px, 38vh) minmax(260px, auto) minmax(260px, 1fr);
+        grid-template-rows: minmax(0, 38vh) minmax(0, 220px) minmax(0, 1fr);
         grid-template-areas: "graph market controls" "order market controls" "events chat controls";
         gap: calc(var(--grid) * 2);
         min-height: 0;
@@ -381,6 +382,7 @@
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
         min-height: 0;
+        overflow: hidden;
       }
 
       #event-feed,
@@ -392,6 +394,7 @@
         overflow: auto;
         padding: var(--grid);
         scrollbar-color: var(--line-dim) var(--panel-2);
+        scrollbar-gutter: stable;
       }
 
       .event-message,
@@ -430,6 +433,7 @@
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
         min-height: 0;
+        overflow: hidden;
       }
 
       .status {
