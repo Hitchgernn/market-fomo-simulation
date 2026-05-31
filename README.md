@@ -80,21 +80,38 @@ The dashboard keeps trading/simulation terminology visible for presentation clar
 - `Controls`: runtime parameters and presets.
 - `Market Events` / `Market Chat`: scrollable feeds for newer and older messages.
 
-## Optional Gemini Chat
+## Optional Market Chat
 
-Run the backend with one key:
+The simulation can generate short retail trader messages from Gemini, OpenRouter, or local Ollama. Without provider config, chat stays empty but the simulation still works.
 
-```bash
-GEMINI_API_KEY="your_api_key" uvicorn backend.api.server:app --host 127.0.0.1 --port 8000 --reload
-```
-
-Or multiple keys:
+Gemini:
 
 ```bash
-GEMINI_API_KEYS="key_1,key_2,key_3" uvicorn backend.api.server:app --host 127.0.0.1 --port 8000 --reload
+CHAT_PROVIDER=gemini GEMINI_API_KEY="your_api_key" uvicorn backend.api.server:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Without keys, chat stays empty but the simulation still works.
+OpenRouter:
+
+```bash
+CHAT_PROVIDER=openrouter OPENROUTER_API_KEY="your_api_key" OPENROUTER_MODEL="meta-llama/llama-3.2-3b-instruct:free" uvicorn backend.api.server:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Local Ollama:
+
+```bash
+CHAT_PROVIDER=ollama OLLAMA_BASE_URL="http://localhost:11434" OLLAMA_MODEL="qwen3.5:4b" uvicorn backend.api.server:app --host 127.0.0.1 --port 8000 --reload
+```
+
+The `/state` and `/tick` responses include chat diagnostics:
+
+```json
+"chat": {
+  "enabled": true,
+  "provider": "openrouter",
+  "model": "meta-llama/llama-3.2-3b-instruct:free",
+  "lastError": null
+}
+```
 
 ## Dashboard Controls
 
