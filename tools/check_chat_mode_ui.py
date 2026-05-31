@@ -18,6 +18,7 @@ required_js = [
     'startScriptedChatTimer();',
     'setInterval(addScriptedChatMessage, SCRIPTED_CHAT_INTERVAL_MS);',
     'function addScriptedChatMessage()',
+    'document.getElementById("chat-mode-ai").checked || !isRunning || !lastPayload',
     'while (feed.children.length > 40)',
 ]
 forbidden_js = [

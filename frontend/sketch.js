@@ -530,7 +530,7 @@ function pushChats(chats) {
 }
 
 function addScriptedChatMessage() {
-  if (document.getElementById("chat-mode-ai").checked || !lastPayload) {
+  if (document.getElementById("chat-mode-ai").checked || !isRunning || !lastPayload) {
     return;
   }
   const price = lastPayload.price || {};
